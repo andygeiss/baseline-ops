@@ -1,0 +1,64 @@
+# Copied from baseline-ops/templates/compose.yaml. It lives at /opt/<app>/ on
+# the server, next to .env (what runs) and site.env (where it runs).
+#
+# Per app, change exactly two things: `name:` and the alias nothing else uses.
+# Every other line is a rule — see runbooks/new-app.md for what each one stops.
+
+name: app
+
+services:
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    ports:                      # the only public listener on the box
+      - "80:80"                 # ACME challenge + the redirect to HTTPS
+      - "443:443"
+      - "443:443/udp"           # HTTP/3
+    env_file: ./site.env        # DOMAIN=example.com — lives on the server, not in git
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certificates + the ACME account: MUST outlive the container
+      - caddy_config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE] # the one capability needed to bind 80 and 443
+    security_opt: [no-new-privileges:true]
+    depends_on: [app]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  app:
+    build:
+      context: ./src            # the repository, extracted there by the deploy
+    image: app:${IMAGE_TAG:?IMAGE_TAG must be set in .env}
+    pull_policy: never          # built right here; never reach for a registry
+    restart: unless-stopped
+    stop_grace_period: 15s      # longer than the app's ~10 s shutdown deadline
+    expose: ["8080"]            # no ports: — only Caddy, on this network, can reach it
+    environment:                # how it is operated; the image owns HOST, PORT, DATABASE_URL
+      ENV: prod
+      LOG_LEVEL: info
+      GOMEMLIMIT: 450MiB
+      CREDENTIALS_DIRECTORY: /run/secrets
+    secrets:
+      - smtp-key
+    volumes:
+      - data:/var/lib/app
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+secrets:
+  smtp-key:
+    file: ./secrets/smtp-key
+
+volumes:
+  caddy_config:
+  caddy_data:
+  data:

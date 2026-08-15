@@ -1,0 +1,19 @@
+# Copied from baseline-ops/templates/dockerignore, saved in the application
+# repository as .dockerignore.
+
+# .git is deliberately NOT ignored: the toolchain reads it to stamp the
+# version into the binary (see Dockerfile).
+
+# Local database files — never bake state into an image.
+*.db
+*.db-wal
+*.db-shm
+
+# Local build output, packed sources, and secrets.
+/bin/
+*.tar.gz
+.env
+
+# Editor and tooling noise.
+.DS_Store
+.claude/

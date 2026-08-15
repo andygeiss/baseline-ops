@@ -1,0 +1,11 @@
+# Copied from baseline-ops/templates/Caddyfile. Caddy substitutes {$DOMAIN}
+# before it parses this file; the value comes from site.env on the server, so
+# the same repository serves production and staging without an edit.
+#
+# reverse_proxy reaches the app by Compose service name — the app publishes no
+# port at all.
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8080
+}
