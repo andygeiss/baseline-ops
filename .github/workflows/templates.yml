@@ -1,0 +1,109 @@
+name: templates
+
+# The templates here are copied into every application repository, and nothing
+# in this repository can build them: it holds no code. So the gate borrows some
+# — a checkout of baseline-reference, the baseline's own acceptance test — and
+# builds the template against it, exactly as an application would.
+#
+# The alternative is what this replaces: each application keeping its own copy,
+# built by nobody, drifting from the original one well-meant edit at a time.
+on:
+  push: {branches: [main]}
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 2"   # weekly: the base images in VERSIONS.md move under their minor tags
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: baseline-ops-template-check
+
+jobs:
+  dockerfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the application to build against
+        uses: actions/checkout@v7
+        with:
+          repository: andygeiss/baseline-reference
+          path: app
+          # The toolchain stamps info.Main.Version from VCS metadata, and a
+          # depth-1 checkout brings no tags. The version gate below is what
+          # would fail, and it would look like a template bug.
+          fetch-depth: 0
+
+      - name: Copy the templates in, as an application does
+        run: |
+          set -eux
+          cp templates/Dockerfile app/Dockerfile
+          cp templates/dockerignore app/.dockerignore
+
+      - name: Build
+        run: docker build -t "$IMAGE" ./app
+
+      # Run it under compose.yaml's constraints, not plain `docker run`: the
+      # read-only root, the state volume, the tmpfs, and the dropped
+      # capabilities are what the image actually meets on the server. Only a
+      # running container proves the two templates still agree.
+      - name: Run under the compose file's constraints
+        run: |
+          set -eux
+          docker run -d --name check \
+            --read-only \
+            --tmpfs /tmp \
+            -v template-check-state:/var/lib/app \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8080:8080 \
+            "$IMAGE"
+
+      # The image's own HEALTHCHECK asks the ops listener, so waiting for
+      # "healthy" proves the listener, the health route, and the busybox wget
+      # the template counts on instead of adding a package.
+      - name: Wait for the image's own healthcheck
+        run: |
+          set -eu
+          status=starting
+          for _ in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' check)
+            if [ "$status" = healthy ]; then exit 0; fi
+            if [ "$status" = unhealthy ]; then break; fi
+            sleep 2
+          done
+          echo "never became healthy: $status"
+          exit 1
+
+      # Two silent failures, and the only place either can be caught: a build
+      # stage without git, and a .dockerignore that excludes .git. Both ship a
+      # binary that reports "unknown" and behaves correctly in every other way,
+      # so "which version is running?" quietly stops having an answer.
+      - name: The binary stamped its own version
+        run: |
+          set -eu
+          body=$(docker exec check wget -qO- http://127.0.0.1:6060/healthz)
+          echo "$body"
+          case "$body" in
+            *'"version":"unknown"'*) echo "no version stamp: is git in the build stage?"; exit 1 ;;
+            *'"version":""'*)        echo "empty version stamp"; exit 1 ;;
+          esac
+
+      - name: The application answers on the port Caddy proxies
+        run: curl -fsS --max-time 10 http://127.0.0.1:8080/ >/dev/null
+
+      # A template that lost its USER line passes every gate above and hands
+      # root to whatever gets in.
+      - name: The container does not run as root
+        run: |
+          set -eu
+          user=$(docker inspect -f '{{.Config.User}}' check)
+          if [ "$user" != "10001:10001" ]; then
+            echo "runs as '$user', want 10001:10001"
+            exit 1
+          fi
+
+      - name: Container logs
+        if: always()
+        run: docker logs check || true
