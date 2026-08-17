@@ -13,7 +13,7 @@ and in the baseline when it changes the code:
 | "Does the app log to stdout, and on which port does `/healthz` live?" | baseline |
 | "Which proxy terminates TLS, and where do its certificates live?" | here |
 
-- **Last verified:** 2026-08-15
+- **Last verified:** 2026-08-17
 - **Servers:** one — `vserver`. Everything here is written for it.
 - **Format:** Markdown, plus the templates every application copies. No code.
 
@@ -80,9 +80,11 @@ read-only root, state volume, tmpfs, dropped capabilities — and asserts four
 things the templates promise that nothing else would catch:
 
 1. the image's own `HEALTHCHECK` reaches the ops listener and reports healthy;
-2. `/healthz` names a real version rather than `unknown` — what a build stage
-   without `git`, or a `.dockerignore` that excludes `.git`, each produce
-   silently;
+2. `/healthz` names a real version, and names **the same one after a restart** —
+   a build stage without `git`, or a `.dockerignore` that excludes `.git`, each
+   silently leave the binary with no VCS metadata, and the baseline's canonical
+   reader then answers a per-boot id rather than `unknown`. Only restarting the
+   container tells the two apart;
 3. the application answers on the port Caddy proxies;
 4. the container runs as `10001:10001`, not root.
 

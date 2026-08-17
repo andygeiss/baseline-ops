@@ -78,17 +78,47 @@ jobs:
 
       # Two silent failures, and the only place either can be caught: a build
       # stage without git, and a .dockerignore that excludes .git. Both ship a
-      # binary that reports "unknown" and behaves correctly in every other way,
-      # so "which version is running?" quietly stops having an answer.
-      - name: The binary stamped its own version
+      # binary that behaves correctly in every other way, so "which version is
+      # running?" quietly stops having an answer.
+      #
+      # Neither shows up as "unknown" any more. The baseline's canonical reader
+      # (patterns/go-performance.md) falls through to a per-boot id when there is
+      # no VCS metadata, precisely so an edited tree cannot serve stale immutable
+      # assets — which means the symptom is a version that CHANGES ON EVERY
+      # RESTART. Restarting the container is what catches it: a real stamp is the
+      # same string twice, a boot id is not. "unknown" now means something else
+      # entirely — the binary is on the CLI reader, which is the wrong one here.
+      - name: The binary stamped its own version, and the stamp survives a restart
         run: |
           set -eu
-          body=$(docker exec check wget -qO- http://127.0.0.1:6060/healthz)
-          echo "$body"
-          case "$body" in
-            *'"version":"unknown"'*) echo "no version stamp: is git in the build stage?"; exit 1 ;;
-            *'"version":""'*)        echo "empty version stamp"; exit 1 ;;
+          healthz() { docker exec check wget -qO- http://127.0.0.1:6060/healthz; }
+
+          before=$(healthz); echo "before: $before"
+          case "$before" in
+            *'"version":"unknown"'*)
+              echo "reports \"unknown\": this binary uses the CLI reader from patterns/go-cli.md."
+              echo "anything serving immutable assets needs the three-case reader in patterns/go-performance.md."
+              exit 1 ;;
+            *'"version":""'*) echo "empty version stamp"; exit 1 ;;
           esac
+
+          # Poll /healthz itself rather than the health status: docker can still
+          # report the pre-restart "healthy" for a moment, which would race.
+          docker restart check >/dev/null
+          after=""
+          for _ in $(seq 1 30); do
+            if after=$(healthz 2>/dev/null) && [ -n "$after" ]; then break; fi
+            sleep 2
+          done
+          [ -n "$after" ] || { echo "no answer from /healthz after a restart"; exit 1; }
+          echo "after:  $after"
+
+          if [ "$before" != "$after" ]; then
+            echo "the version changed across a restart, so it is a per-boot id and not a stamp."
+            echo "no VCS metadata reached the build: is git installed in the build stage,"
+            echo "and does .dockerignore keep .git?"
+            exit 1
+          fi
 
       - name: The application answers on the port Caddy proxies
         run: curl -fsS --max-time 10 http://127.0.0.1:8080/ >/dev/null

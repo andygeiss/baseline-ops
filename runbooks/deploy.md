@@ -1,6 +1,6 @@
 # Runbook: Deploy a release
 
-**Last verified: 2026-08-15**
+**Last verified: 2026-08-17**
 
 Ship a tagged version of an application to [vserver](../servers/vserver.md), or
 put an older one back. The server builds what it runs; nothing here needs Docker
@@ -45,8 +45,10 @@ curl -sI https://example.com | head -1
 Why each part is the way it is:
 
 - **`.git` travels.** The toolchain reads it inside the build to stamp
-  `info.Main.Version`. Without it every binary reports `unknown` and nothing
-  warns you. This is also why the tarball is not `git archive`.
+  `info.Main.Version`. Without it there is nothing to stamp and nothing warns
+  you: the canonical reader falls back to a per-boot id, so `/healthz` answers a
+  different string after every restart and the immutable assets are
+  re-downloaded with it. This is also why the tarball is not `git archive`.
 - **The build runs before `up`.** A Dockerfile that breaks, a full disk, a
   network hiccup pulling base images — all of them leave the previous container
   running and healthy. A failed deploy is a deploy that did not happen.
@@ -88,5 +90,6 @@ git checkout v1.2.2      # then the deploy steps above
 | Build fails on `go mod download` | The server has no outbound network, or the module proxy is down | The old container is still running; retry later |
 | Container restarts in a loop | The app failed at boot — usually configuration | `docker compose logs app`; the message is the app's own |
 | `docker compose ps` says `unhealthy` | `/healthz` is failing: the database is unreachable or the app never bound its port | `docker compose logs app`; check the `data` volume exists |
-| Version reports `unknown` at `/healthz` | `.git` did not reach the build context | Check the tarball's excludes and `.dockerignore` |
+| The version at `/healthz` changes on every restart | `.git` did not reach the build context, so the build carries no VCS metadata and the reader falls back to a per-boot id | Check the tarball's excludes and `.dockerignore`; `git` must also be installed in the build stage |
+| Version reports `unknown` at `/healthz` | Not a deploy fault: the binary is using the CLI version reader, which anything serving `immutable` assets must not | The application's bug — baseline `patterns/go-performance.md` has the three-case reader it needs |
 | Certificate errors after a deploy | `caddy_data` was recreated | Confirm it is a named volume, not a path inside `src/` |

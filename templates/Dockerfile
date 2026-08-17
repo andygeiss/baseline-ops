@@ -13,7 +13,10 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 
 # git is not a dependency of the code. The toolchain shells out to it to read
 # the VCS metadata that stamps info.Main.Version — and golang:alpine ships no
-# git. Without this line every deployed binary reports "unknown", silently.
+# git. Without this line the build carries none, and the baseline's canonical
+# reader falls through to a per-boot id: /healthz answers a different string
+# after every restart, and the immutable static assets are re-downloaded with
+# it. Silent either way — nothing fails, the answer to "what is running?" goes.
 RUN apk add --no-cache git
 
 WORKDIR /src
