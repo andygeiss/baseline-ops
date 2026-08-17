@@ -40,6 +40,15 @@ jobs:
           set -eux
           cp templates/Dockerfile app/Dockerfile
           cp templates/dockerignore app/.dockerignore
+          # An application repository *commits* its templates, so its tree is
+          # clean and the toolchain stamps a real version. Left untracked here
+          # they make the checkout dirty, the stamp becomes "<version>+dirty",
+          # and the canonical reader falls through to a per-boot id — failing
+          # the version gate below for a reason that exists nowhere but this
+          # runner. Committing them is what makes the harness faithful.
+          git -C app add -A
+          git -C app -c user.email=ci@local -c user.name=ci \
+            commit -q -m "ci: the templates under test"
 
       - name: Build
         run: docker build -t "$IMAGE" ./app
