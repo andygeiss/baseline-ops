@@ -12,6 +12,14 @@
 # `todo` is the application's alias on the `web` network, the same name as
 # /opt/todo and `name:` in its compose.yaml. reverse_proxy reaches it by that
 # name; the application publishes no port at all.
+#
+# A service that is not built on the template answers on its own port, so its
+# site file writes the two lines itself instead of importing the snippet:
+#
+#     portainer.example.com {
+#     	encode zstd gzip
+#     	reverse_proxy portainer:9000
+#     }
 
 (site) {
 	encode zstd gzip

@@ -50,6 +50,10 @@ changes: the policy every site shares (compression, the upstream port) is the
 `site` snippet in `Caddyfile`, and the file you just wrote only names a domain
 and an alias.
 
+A service that is not built on the template answers on its own port, so its
+site file spells out the two lines instead of importing the snippet —
+[portainer.md](portainer.md) has the one example.
+
 `validate` runs first so a typo never reaches the running proxy. `reload` swaps
 the configuration without dropping a connection; the other sites never notice.
 Check:

@@ -61,10 +61,14 @@ or reserved; a tunnel uses 18000 and up.
 | The proxy | One Caddy container fronts every application | Runs from `/opt/caddy`, deployed from this repository's `caddy/` — [runbooks/caddy.md](../runbooks/caddy.md). It is the only stack with a `ports:` block. |
 | nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy is a container; Go runs inside the build stage. A package installed on the host is a package that drifts. |
 
-Portainer MAY be installed for a read-only look at what is running. If it is:
-publish it to `127.0.0.1` only and reach it through an SSH tunnel
+Portainer is installed, for a look at what is running — its own stack in
+`/opt/portainer`, from this repository's `portainer/`
+([runbooks/portainer.md](../runbooks/portainer.md)). It sits behind the proxy
+at `https://portainer.ai-at-home.de` like every application, and publishes one
+port, `127.0.0.1:9443`, for the SSH-tunnel path
 (`ssh -L 9443:127.0.0.1:9443 andygeiss@vserver`). It mounts the Docker socket,
-which is root — never expose one to the internet.
+which is root — so its login is the only thing between the internet and root
+on this host. The password is long, and the socket itself is never published.
 
 ## Ports
 
@@ -124,6 +128,8 @@ The proxy has a directory of its own, not owned by any application:
 ├── Caddyfile         ← from this repository's caddy/; overwritten by every proxy upgrade
 ├── compose.yaml      ← from this repository's caddy/; overwritten by every proxy upgrade
 └── sites/            ← one <app>.caddy per application: its domain and its alias; server-owned
+/opt/portainer/
+└── compose.yaml      ← from this repository's portainer/; its data is the volume portainer_data
 ```
 
 Its certificates live in the named volume `caddy_caddy_data`, which no deploy

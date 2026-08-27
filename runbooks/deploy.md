@@ -23,7 +23,7 @@ VERSION=$(git describe --tags --exact-match)
 
 # 2. Pack the repository — .git included, secrets and local state excluded.
 mkdir -p bin
-COPYFILE_DISABLE=1 tar czf bin/<app>-$VERSION-src.tar.gz \
+COPYFILE_DISABLE=1 tar --no-xattrs -czf bin/<app>-$VERSION-src.tar.gz \
     --exclude=./bin --exclude=./.env --exclude='./*.db*' .
 
 # 3. Copy it over, with the one file that describes the stack.
@@ -49,6 +49,11 @@ Why each part is the way it is:
   you: the canonical reader falls back to a per-boot id, so `/healthz` answers a
   different string after every restart and the immutable assets are
   re-downloaded with it. This is also why the tarball is not `git archive`.
+- **`COPYFILE_DISABLE=1` and `--no-xattrs` both address macOS.** The first keeps
+  the `._*` resource-fork files out of the archive; the second keeps the
+  extended attributes (`com.apple.provenance` on every file) out of the pax
+  headers, which GNU tar on the server would otherwise report line by line as
+  it extracts. Neither changes what is in the archive.
 - **The build runs before `up`.** A Dockerfile that breaks, a full disk, a
   network hiccup pulling base images — all of them leave the previous container
   running and healthy. A failed deploy is a deploy that did not happen.

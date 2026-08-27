@@ -53,10 +53,12 @@ application's Makefile because it changes the server, and it exists because
 [servers/vserver.md](servers/vserver.md) says a house machine may carry a
 service in over SSH — "Tunnels from the house".
 
-The proxy is the other thing this repository puts on the server itself:
-[`caddy/`](caddy/) is the one Caddy stack every application sits behind, and
-[runbooks/caddy.md](runbooks/caddy.md) installs, extends, and upgrades it. It
-has no `make` target yet — the steps have not run twice.
+Two stacks are the server's own rather than an application's, and this
+repository deploys them: [`caddy/`](caddy/), the one proxy every application
+sits behind ([runbooks/caddy.md](runbooks/caddy.md)), and
+[`portainer/`](portainer/), the optional look at what is running
+([runbooks/portainer.md](runbooks/portainer.md)). Neither has a `make` target
+yet — the steps have not run twice.
 
 ## Repository structure
 
@@ -69,11 +71,14 @@ baseline-ops/
 │   └── compose.yaml
 ├── LICENSE                     ← MIT
 ├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server)
+├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
+│   └── compose.yaml
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── new-app.md              ← put an application on the server the first time
+│   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
 │   └── vserver.md              ← the machine: what is installed, which accounts, which ports
@@ -112,7 +117,7 @@ manual. The weekly run is the one that earns its keep — `alpine:3.24` and
 `golang:1.26-alpine` are minor tags, so what they name changes under a template
 nobody edited.
 
-**`compose.yaml` and `caddy/` are not gated.** Validating either needs a server
+**`compose.yaml`, `caddy/`, and `portainer/` are not gated.** Validating either needs a server
 context invented on the runner — an external `web` network, a secrets file, a
 site file with a domain — and an invented context is one more thing that
 drifts. Both are reviewed by hand against
