@@ -33,8 +33,8 @@ request that fails retries into a rate limit.
 ## 3. Prepare the directory on the server
 
 ```sh
-ssh deploy@vserver 'mkdir -p /opt/<app>/secrets && chmod 700 /opt/<app>/secrets'
-ssh deploy@vserver 'echo DOMAIN=example.com > /opt/<app>/site.env'
+ssh andygeiss@vserver 'mkdir -p /opt/<app>/secrets && chmod 700 /opt/<app>/secrets'
+ssh andygeiss@vserver 'echo DOMAIN=example.com > /opt/<app>/site.env'
 ```
 
 `site.env` is the server's file: it says where this app runs, and no deploy ever
@@ -46,8 +46,8 @@ and staging from another.
 For each secret the application reads:
 
 ```sh
-scp smtp-key deploy@vserver:/opt/<app>/secrets/smtp-key
-ssh deploy@vserver 'chmod 400 /opt/<app>/secrets/smtp-key && chown 10001 /opt/<app>/secrets/smtp-key'
+scp smtp-key andygeiss@vserver:/opt/<app>/secrets/smtp-key
+ssh andygeiss@vserver 'chmod 400 /opt/<app>/secrets/smtp-key && chown 10001 /opt/<app>/secrets/smtp-key'
 ```
 
 `chown 10001` matters: the container runs as that UID and cannot read a file it
@@ -72,7 +72,7 @@ Run [deploy.md](deploy.md). Then check the things that only exist in production:
 ```sh
 curl -sI https://example.com | head -1                 # 200, and a real certificate
 curl -sI http://example.com | head -2                  # 308 to https
-ssh deploy@vserver 'cd /opt/<app> && docker compose ps' # app healthy, caddy running
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose ps' # app healthy, caddy running
 ```
 
 ## 7. If this is the second application on the server
@@ -82,7 +82,7 @@ Caddy. Move the proxy out, once, and every application afterwards is a stack
 with no public port at all.
 
 ```sh
-ssh deploy@vserver 'docker network create web'
+ssh andygeiss@vserver 'docker network create web'
 ```
 
 Run Caddy alone from `/opt/caddy/compose.yaml` — the `caddy` service from the

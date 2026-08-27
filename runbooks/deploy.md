@@ -27,18 +27,18 @@ COPYFILE_DISABLE=1 tar czf bin/<app>-$VERSION-src.tar.gz \
     --exclude=./bin --exclude=./.env --exclude='./*.db*' .
 
 # 3. Copy it over, with the two files that describe the stack.
-ssh deploy@vserver 'rm -rf /opt/<app>/src && mkdir -p /opt/<app>/src'
-scp bin/<app>-$VERSION-src.tar.gz compose.yaml Caddyfile deploy@vserver:/opt/<app>/
+ssh andygeiss@vserver 'rm -rf /opt/<app>/src && mkdir -p /opt/<app>/src'
+scp bin/<app>-$VERSION-src.tar.gz compose.yaml Caddyfile andygeiss@vserver:/opt/<app>/
 
 # 4. Extract, and record what is about to run.
-ssh deploy@vserver "cd /opt/<app> && tar xzf <app>-$VERSION-src.tar.gz -C src \
+ssh andygeiss@vserver "cd /opt/<app> && tar xzf <app>-$VERSION-src.tar.gz -C src \
     && rm <app>-$VERSION-src.tar.gz && echo IMAGE_TAG=$VERSION > .env"
 
 # 5. Build, then run exactly what was built.
-ssh deploy@vserver 'cd /opt/<app> && docker compose build && docker compose up -d --no-build'
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose build && docker compose up -d --no-build'
 
 # 6. Check.
-ssh deploy@vserver 'cd /opt/<app> && docker compose ps'
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose ps'
 curl -sI https://example.com | head -1
 ```
 
@@ -65,7 +65,7 @@ Why each part is the way it is:
 ## Roll back
 
 ```sh
-ssh deploy@vserver 'cd /opt/<app> && echo IMAGE_TAG=v1.2.2 > .env \
+ssh andygeiss@vserver 'cd /opt/<app> && echo IMAGE_TAG=v1.2.2 > .env \
     && docker compose up -d --no-build'
 ```
 

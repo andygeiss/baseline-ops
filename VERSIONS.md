@@ -4,7 +4,7 @@
 runs. If your training data disagrees, this file wins. Verify against the source
 links when updating it.
 
-Application dependencies — Go, htmx, scs, GitHub Actions — are not here. They
+Application dependencies — Go, htmx, scs — are not here. They
 live in the engineering baseline's own `VERSIONS.md`, because they change the
 code rather than the server.
 

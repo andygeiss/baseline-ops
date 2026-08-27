@@ -40,9 +40,9 @@ is why it is a mounted file and not the environment variables Litestream would
 also accept. It is never committed and never deployed.
 
 ```sh
-ssh deploy@vserver 'chmod 400 /opt/<app>/litestream.yml && chown 10001 /opt/<app>/litestream.yml'
-ssh deploy@vserver 'cd /opt/<app> && docker compose up -d'
-ssh deploy@vserver 'cd /opt/<app> && docker compose logs litestream | tail -20'
+ssh andygeiss@vserver 'chmod 400 /opt/<app>/litestream.yml && chown 10001 /opt/<app>/litestream.yml'
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose up -d'
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose logs litestream | tail -20'
 ```
 
 The log is the check: replication either started or said why it could not.
@@ -54,7 +54,7 @@ purpose, and write down what you ran:
 
 ```sh
 # Into a scratch path, never over the live database.
-ssh deploy@vserver 'cd /opt/<app> && docker compose run --rm --entrypoint litestream \
+ssh andygeiss@vserver 'cd /opt/<app> && docker compose run --rm --entrypoint litestream \
     litestream restore -config /etc/litestream.yml -o /tmp/check.db <replica-url>'
 ```
 
@@ -67,7 +67,7 @@ proves it is the data you expect rather than an empty file with the right name.
    restore becomes a corruption.
 
    ```sh
-   ssh deploy@vserver 'cd /opt/<app> && docker compose stop app litestream'
+   ssh andygeiss@vserver 'cd /opt/<app> && docker compose stop app litestream'
    ```
 
 2. **Restore to a scratch path and inspect it**, exactly as in the rehearsal.
@@ -77,8 +77,8 @@ proves it is the data you expect rather than an empty file with the right name.
 3. **Move it into place**, then start again:
 
    ```sh
-   ssh deploy@vserver 'cd /opt/<app> && docker compose up -d'
-   ssh deploy@vserver 'cd /opt/<app> && docker compose ps'   # healthy, and the app agrees
+   ssh andygeiss@vserver 'cd /opt/<app> && docker compose up -d'
+   ssh andygeiss@vserver 'cd /opt/<app> && docker compose ps'   # healthy, and the app agrees
    ```
 
 4. **Check the version at `/healthz`** afterwards. A restore that also silently

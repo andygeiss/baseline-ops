@@ -42,6 +42,17 @@ make install    # symlinks this repo to ~/.claude/skills/engineering-operations
 make uninstall  # removes the symlink
 ```
 
+## Server setup that runs from here
+
+```sh
+make sshd-tunnel    # once per server: let a house machine's ssh -R bind docker0
+```
+
+The only host change with a target so far. It is here and not in an
+application's Makefile because it changes the server, and it exists because
+[servers/vserver.md](servers/vserver.md) says a house machine may carry a
+service in over SSH — "Tunnels from the house".
+
 ## Repository structure
 
 ```
@@ -49,7 +60,7 @@ baseline-ops/
 ├── .github/workflows/
 │   └── templates.yml           ← builds templates/Dockerfile against baseline-reference
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server)
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── deploy.md               ← ship a tagged release; roll one back
@@ -111,7 +122,7 @@ not live there.
   file.
 - **No image registry.** The server builds what it runs, from source that
   arrived over `scp`.
-- **No CD pipeline.** CI proves the code is good; a person decides when it goes
+- **No CD pipeline.** The gates prove the code is good; a person decides when it goes
   live. The one exception is a CLI tool, whose release *is* its distribution —
   that stays in the baseline.
 - **No secrets.** Every credential lives on the server, mode `0400`, and nowhere

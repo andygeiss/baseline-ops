@@ -7,7 +7,7 @@ holds every secret. There is exactly one of these; when a second server exists,
 it gets its own document rather than a branch in this one.
 
 ```sh
-ssh deploy@vserver 'docker compose ls'    # what is running, per application
+ssh andygeiss@vserver 'docker compose ls'    # what is running, per application
 ```
 
 ## Reaching it
@@ -20,13 +20,37 @@ The name comes from your own `/etc/hosts`, not from DNS and not from a Makefile:
 
 One line changes when the address does. SSH is key-only:
 
-- The `deploy` account has a password of no kind, and no sudo rights.
+- `andygeiss` is the deploy account. It is in the `docker` group and in
+  `sudo`; sudo asks for its password, and that password never works over SSH.
 - Password authentication MUST be off in `sshd_config`.
 - Your private key stays on your machine, protected by a passphrase.
 
 **Membership in the `docker` group is root on this host.** Anyone who reaches
 the Docker socket can start a container that mounts `/`. A leaked deploy key is
 a compromised host — rotate it, do not reason about blast radius.
+
+## Tunnels from the house
+
+The house network has no public address (a CGNAT WAN), so this server cannot
+open a connection to a machine in it. A house machine opens one instead, with
+`ssh -R`, and carries its service in: the application's Makefile owns that
+command, because the application knows which service and which port.
+
+The server's part is one sshd drop-in, `/etc/ssh/sshd_config.d/10-tunnel.conf`,
+which `make sshd-tunnel` in this repository writes:
+
+```
+GatewayPorts clientspecified    # the client may bind docker0, not just loopback
+ClientAliveInterval 30          # a dead link is noticed within 90 s …
+ClientAliveCountMax 3           # … and the port freed for the reconnect
+```
+
+The tunnel MUST bind `172.17.0.1` — the `docker0` address — and nothing else.
+A container cannot reach the host's loopback, so `127.0.0.1` is useless to it;
+`0.0.0.0` would publish the house service to the internet, and the services
+carried in this way send no API key. `172.17.0.1` is reachable by every
+container on this host and by nothing outside it. Ports below 10000 are taken
+or reserved; a tunnel uses 18000 and up.
 
 ## What is installed
 
@@ -37,7 +61,7 @@ a compromised host — rotate it, do not reason about blast radius.
 
 Portainer MAY be installed for a read-only look at what is running. If it is:
 publish it to `127.0.0.1` only and reach it through an SSH tunnel
-(`ssh -L 9443:127.0.0.1:9443 deploy@vserver`). It mounts the Docker socket,
+(`ssh -L 9443:127.0.0.1:9443 andygeiss@vserver`). It mounts the Docker socket,
 which is root — never expose one to the internet.
 
 ## Ports
@@ -56,7 +80,8 @@ meant to be public.
 
 ## Directory layout
 
-One directory per application, named after its repository, owned by `deploy`:
+One directory per application, named after its repository, owned by
+`andygeiss`:
 
 ```
 /opt/<app>/
