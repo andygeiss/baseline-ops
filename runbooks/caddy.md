@@ -13,6 +13,8 @@ Run every command from a checkout of this repository.
 
 ```sh
 # 1. The network every application joins, and the directory the proxy runs from.
+#    /opt belongs to root, so root makes the directory and hands it over.
+ssh root@vserver 'mkdir -p /opt/caddy && chown andygeiss:andygeiss /opt/caddy'
 ssh andygeiss@vserver 'docker network create web && mkdir -p /opt/caddy/sites'
 
 # 2. The stack, from this repository.

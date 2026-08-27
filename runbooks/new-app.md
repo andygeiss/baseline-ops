@@ -43,6 +43,7 @@ certificate request that fails retries into a rate limit.
 ## 3. Prepare the directory on the server
 
 ```sh
+ssh root@vserver 'mkdir -p /opt/<app> && chown andygeiss:andygeiss /opt/<app>'   # /opt belongs to root
 ssh andygeiss@vserver 'mkdir -p /opt/<app>/secrets && chmod 700 /opt/<app>/secrets'
 ```
 
