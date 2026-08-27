@@ -1,6 +1,6 @@
 # Runbook: Deploy a release
 
-**Last verified: 2026-08-17**
+**Last verified: 2026-08-27**
 
 Ship a tagged version of an application to [vserver](../servers/vserver.md), or
 put an older one back. The server builds what it runs; nothing here needs Docker
@@ -26,9 +26,9 @@ mkdir -p bin
 COPYFILE_DISABLE=1 tar czf bin/<app>-$VERSION-src.tar.gz \
     --exclude=./bin --exclude=./.env --exclude='./*.db*' .
 
-# 3. Copy it over, with the two files that describe the stack.
+# 3. Copy it over, with the one file that describes the stack.
 ssh andygeiss@vserver 'rm -rf /opt/<app>/src && mkdir -p /opt/<app>/src'
-scp bin/<app>-$VERSION-src.tar.gz compose.yaml Caddyfile andygeiss@vserver:/opt/<app>/
+scp bin/<app>-$VERSION-src.tar.gz compose.yaml andygeiss@vserver:/opt/<app>/
 
 # 4. Extract, and record what is about to run.
 ssh andygeiss@vserver "cd /opt/<app> && tar xzf <app>-$VERSION-src.tar.gz -C src \
@@ -92,4 +92,5 @@ git checkout v1.2.2      # then the deploy steps above
 | `docker compose ps` says `unhealthy` | `/healthz` is failing: the database is unreachable or the app never bound its port | `docker compose logs app`; check the `data` volume exists |
 | The version at `/healthz` changes on every restart | `.git` did not reach the build context, so the build carries no VCS metadata and the reader falls back to a per-boot id | Check the tarball's excludes and `.dockerignore`; `git` must also be installed in the build stage |
 | Version reports `unknown` at `/healthz` | Not a deploy fault: the binary is using the CLI version reader, which anything serving `immutable` assets must not | The application's bug — baseline `patterns/go-performance.md` has the three-case reader it needs |
-| Certificate errors after a deploy | `caddy_data` was recreated | Confirm it is a named volume, not a path inside `src/` |
+| `502` from the proxy after a deploy | The app is not on the `web` network, or its alias changed | `compose.yaml` MUST carry the `networks:` block from the template, alias = `<app>`; [caddy.md](caddy.md) has the rest |
+| Certificate errors after a deploy | Not this deploy's doing: an application never touches TLS | The proxy's own runbook, [caddy.md](caddy.md) |

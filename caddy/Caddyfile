@@ -1,0 +1,21 @@
+# The proxy's policy, once, and a site file per application. Lives at
+# /opt/caddy/Caddyfile on the server; runbooks/caddy.md says how it gets there.
+#
+# A site file is four lines in /opt/caddy/sites/<app>.caddy, written on the
+# server and never in git — it names a domain, which is a fact about this
+# machine:
+#
+#     todo.example.com {
+#     	import site todo
+#     }
+#
+# `todo` is the application's alias on the `web` network, the same name as
+# /opt/todo and `name:` in its compose.yaml. reverse_proxy reaches it by that
+# name; the application publishes no port at all.
+
+(site) {
+	encode zstd gzip
+	reverse_proxy {args[0]}:8080
+}
+
+import /etc/caddy/sites/*.caddy

@@ -1,6 +1,6 @@
 # Server: vserver
 
-**Last verified: 2026-08-15**
+**Last verified: 2026-08-27**
 
 One small Linux VPS. It builds and runs every application, terminates TLS, and
 holds every secret. There is exactly one of these; when a second server exists,
@@ -8,6 +8,7 @@ it gets its own document rather than a branch in this one.
 
 ```sh
 ssh andygeiss@vserver 'docker compose ls'    # what is running, per application
+ssh andygeiss@vserver 'ls /opt/caddy/sites'  # what the proxy serves, one file per site
 ```
 
 ## Reaching it
@@ -57,7 +58,8 @@ or reserved; a tunnel uses 18000 and up.
 | Software | Why | Notes |
 |---|---|---|
 | Docker Engine + Compose plugin | Builds and runs everything | From Docker's own repository, never the distribution package — the distro ships an old Engine and often no Compose plugin at all. Follow https://docs.docker.com/engine/install/ for the distribution. Versions in [VERSIONS.md](../VERSIONS.md). |
-| nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy runs as a container inside each application's stack; Go runs inside the build stage. A package installed on the host is a package that drifts. |
+| The proxy | One Caddy container fronts every application | Runs from `/opt/caddy`, deployed from this repository's `caddy/` — [runbooks/caddy.md](../runbooks/caddy.md). It is the only stack with a `ports:` block. |
+| nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy is a container; Go runs inside the build stage. A package installed on the host is a package that drifts. |
 
 Portainer MAY be installed for a read-only look at what is running. If it is:
 publish it to `127.0.0.1` only and reach it through an SSH tunnel
@@ -78,6 +80,21 @@ behind a firewall that says otherwise.** A `ufw` rule does not stop it. That is
 why no application publishes a port: only Caddy has a `ports:` block, and it is
 meant to be public.
 
+## The `web` network
+
+One Docker network, `web`, created once by hand. The proxy is on it, and so is
+every application, each under an alias equal to its repository name — the name
+the proxy's site file uses in `reverse_proxy todo:8080`. An application on
+`web` needs no `ports:` block; the proxy reaches it by name, and the internet
+cannot.
+
+**Every container on `web` can reach every other on `:8080`.** The deployment
+contract says the app trusts `X-Forwarded-*` "because nothing else can reach
+it"; on this host that means nothing *outside the host*. One person's own
+applications share the network, and that is the whole reason a container that
+is not one of them — a third party's image, a tool someone tries out — MUST
+NOT join `web`. It gets its own network, or it does not run here.
+
 ## Directory layout
 
 One directory per application, named after its repository, owned by
@@ -85,21 +102,34 @@ One directory per application, named after its repository, owned by
 
 ```
 /opt/<app>/
-├── Caddyfile         ← from the repository; overwritten by every deploy
 ├── compose.yaml      ← from the repository; overwritten by every deploy
 ├── .env              ← one line: IMAGE_TAG=v1.2.3; written by every deploy
 ├── litestream.yml    ← only with the backup sidecar; 0400, holds S3 credentials
 ├── secrets/          ← 0400 secret files, owned by 10001
-├── site.env          ← one line: DOMAIN=example.com
+├── site.env          ← optional: KEY=value settings true of this server, not secret
 └── src/              ← the extracted repository; the build context
 ```
 
 **Two kinds of file, and the difference is the whole discipline.** The deploy
-owns `Caddyfile`, `compose.yaml`, `.env`, and `src/` — it overwrites them every
-time, and deletes `src/` first, so a file deleted from the repository is gone
-from the server too. The server owns `site.env`, `secrets/`, and
-`litestream.yml` — they say what is true about *this* machine, no deploy reads
-or writes them, and they survive every release.
+owns `compose.yaml`, `.env`, and `src/` — it overwrites them every time, and
+deletes `src/` first, so a file deleted from the repository is gone from the
+server too. The server owns `site.env`, `secrets/`, and `litestream.yml` — they
+say what is true about *this* machine, no deploy reads or writes them, and they
+survive every release.
+
+The proxy has a directory of its own, not owned by any application:
+
+```
+/opt/caddy/
+├── Caddyfile         ← from this repository's caddy/; overwritten by every proxy upgrade
+├── compose.yaml      ← from this repository's caddy/; overwritten by every proxy upgrade
+└── sites/            ← one <app>.caddy per application: its domain and its alias; server-owned
+```
+
+Its certificates live in the named volume `caddy_caddy_data`, which no deploy
+touches. Where a site's domain is written down is `sites/`, and nowhere else: an
+application repository names no domain, which is what lets one repository serve
+two servers.
 
 ## Secrets
 

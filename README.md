@@ -13,7 +13,7 @@ and in the baseline when it changes the code:
 | "Does the app log to stdout, and on which port does `/healthz` live?" | baseline |
 | "Which proxy terminates TLS, and where do its certificates live?" | here |
 
-- **Last verified:** 2026-08-17
+- **Last verified:** 2026-08-27
 - **Servers:** one — `vserver`. Everything here is written for it.
 - **Format:** Markdown, plus the templates every application copies. No code.
 
@@ -53,16 +53,25 @@ application's Makefile because it changes the server, and it exists because
 [servers/vserver.md](servers/vserver.md) says a house machine may carry a
 service in over SSH — "Tunnels from the house".
 
+The proxy is the other thing this repository puts on the server itself:
+[`caddy/`](caddy/) is the one Caddy stack every application sits behind, and
+[runbooks/caddy.md](runbooks/caddy.md) installs, extends, and upgrades it. It
+has no `make` target yet — the steps have not run twice.
+
 ## Repository structure
 
 ```
 baseline-ops/
 ├── .github/workflows/
 │   └── templates.yml           ← builds templates/Dockerfile against baseline-reference
+├── caddy/                      ← the server's one proxy stack; deployed from here, copied by nobody
+│   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
+│   └── compose.yaml
 ├── LICENSE                     ← MIT
 ├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server)
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
+│   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── new-app.md              ← put an application on the server the first time
 │   └── restore.md              ← get the data back
@@ -70,7 +79,6 @@ baseline-ops/
 │   └── vserver.md              ← the machine: what is installed, which accounts, which ports
 ├── SKILL.md                    ← makes the repo a Claude Code skill
 ├── templates/                  ← copied into each application repository
-│   ├── Caddyfile
 │   ├── compose.yaml
 │   ├── dockerignore            ← copy as .dockerignore
 │   └── Dockerfile
@@ -104,10 +112,12 @@ manual. The weekly run is the one that earns its keep — `alpine:3.24` and
 `golang:1.26-alpine` are minor tags, so what they name changes under a template
 nobody edited.
 
-**`compose.yaml` and `Caddyfile` are not gated.** Validating either needs a
-server context invented on the runner — a `site.env` with a `DOMAIN`, a secrets
-file — and an invented context is one more thing that drifts. Both are reviewed
-by hand against [runbooks/new-app.md](runbooks/new-app.md).
+**`compose.yaml` and `caddy/` are not gated.** Validating either needs a server
+context invented on the runner — an external `web` network, a secrets file, a
+site file with a domain — and an invented context is one more thing that
+drifts. Both are reviewed by hand against
+[runbooks/new-app.md](runbooks/new-app.md) and
+[runbooks/caddy.md](runbooks/caddy.md).
 
 An application repository MUST NOT keep its own copy of a template under its own
 edits. Copies nothing builds drift: baseline-reference carried one that had

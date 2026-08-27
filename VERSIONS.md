@@ -1,6 +1,6 @@
 # Pinned Versions
 
-**Last verified: 2026-08-15.** These are the versions [vserver](servers/vserver.md)
+**Last verified: 2026-08-27.** These are the versions [vserver](servers/vserver.md)
 runs. If your training data disagrees, this file wins. Verify against the source
 links when updating it.
 
@@ -11,7 +11,7 @@ code rather than the server.
 | Component | Pinned version | Released | Notes |
 |---|---|---|---|
 | `alpine` base image | **3.24** | 2026-06-16 | Runtime stage of every application image. Minor tag: patches arrive, surprises do not. |
-| Caddy image | **2.11-alpine** | 2.11.4, 2026-06-03 | TLS termination, automatic certificates and renewal, compression, HTTP/3. One per application stack, or one shared instance once a second app exists. |
+| Caddy image | **2.11-alpine** | 2.11.4, 2026-06-03 | TLS termination, automatic certificates and renewal, compression, HTTP/3. One instance, `/opt/caddy`, in front of every application; a bump is [runbooks/caddy.md](runbooks/caddy.md) "Upgrade", not one deploy per app. |
 | Docker Compose | **v5.4.0** | 2026-08-03 | The `docker compose` plugin, not the retired `docker-compose` script. Ships with the Engine install. |
 | Docker Engine | **29.7.2** | 2026-08-05 | On the server only — it builds and runs everything. Install from Docker's own repository, never the distribution package. |
 | `golang` base image | **1.26-alpine** | 2026-08-13 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
@@ -31,6 +31,8 @@ code rather than the server.
   surprise: read the release notes before bumping a major.
 - **A version bump is a deploy.** Editing a template here changes nothing until
   each application is redeployed — [runbooks/deploy.md](runbooks/deploy.md).
+  Editing `caddy/` changes nothing until the proxy is —
+  [runbooks/caddy.md](runbooks/caddy.md).
 
 ## Sources checked (2026-08-15)
 
