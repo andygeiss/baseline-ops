@@ -1,6 +1,6 @@
 # Pinned Versions
 
-**Last verified: 2026-08-27.** These are the versions [vserver](servers/vserver.md)
+**Last verified: 2026-08-28.** These are the versions [vserver](servers/vserver.md)
 runs. If your training data disagrees, this file wins. Verify against the source
 links when updating it.
 
@@ -16,7 +16,7 @@ code rather than the server.
 | Docker Engine | **29.7.2** | 2026-08-05 | On the server only — it builds and runs everything. Install from Docker's own repository, never the distribution package. |
 | `golang` base image | **1.26-alpine** | 2026-08-13 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
 | Litestream image | **0.5** | 0.5.16, 2026-08-05 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
-| Portainer CE | **2.39.6** | 2026-08-12 | Optional, and the LTS line. 2.44.x is the STS (short-term) line — newer, but this server wants current-stable. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
+| Portainer CE | **2.45.0** | 2026-08-27 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
 
 ## Version policy
 
@@ -47,4 +47,5 @@ code rather than the server.
   https://hub.docker.com/r/litestream/litestream/tags
 - Portainer: https://hub.docker.com/r/portainer/portainer-ce/tags — the `lts` and
   `sts` tags name the two lines; read the version behind `lts`, do not deploy the
-  moving tag
+  moving tag. Which line is which, and until when:
+  https://docs.portainer.io/start/lifecycle (checked 2026-08-28)
