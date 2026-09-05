@@ -9,7 +9,7 @@
 # architecture. On the server both are the same, so nothing cross-compiles; the
 # form is kept so the same file also builds on an arm64 laptop without QEMU
 # emulating the whole toolchain.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 
 # git is not a dependency of the code. The toolchain shells out to it to read
 # the VCS metadata that stamps info.Main.Version — and golang:alpine ships no

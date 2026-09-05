@@ -114,7 +114,7 @@ things the templates promise that nothing else would catch:
 
 Nothing it builds ships: the image dies with the runner, and deploys stay
 manual. The weekly run is the one that earns its keep — `alpine:3.24` and
-`golang:1.26-alpine` are minor tags, so what they name changes under a template
+`golang:1.27-alpine` are minor tags, so what they name changes under a template
 nobody edited.
 
 **`compose.yaml`, `caddy/`, and `portainer/` are not gated.** Validating either needs a server
