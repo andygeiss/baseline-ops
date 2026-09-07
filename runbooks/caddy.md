@@ -130,7 +130,7 @@ upgrade.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `502` on one site | The upstream is unreachable: the app is not on `web`, or the alias in the site file is not the alias in the app's `compose.yaml` | `docker network inspect web` lists who is on it and under which names |
-| `502` on a tunnelled site | The house machine's `ssh -R` is gone | `ss -lntp \| grep 18000` on the server says whether the tunnel is still bound; `make tunnel` on that machine opens it again |
+| `502` on a tunnelled site | The house machine's `ssh -R` is gone | `ss -lntp \| grep 18000` on the server says whether the tunnel is still bound; `make omlx-tunnel` on that machine opens it again |
 | `validate` fails | A site file with a typo, or two files claiming one domain | The message names the file and line; fix it, then reload |
 | A site answers with the wrong certificate, or a self-signed one | The domain in the site file does not resolve to this server, so Let's Encrypt refused | `dig +short <domain>`; fix DNS, then `reload` |
 | Certificate errors after an upgrade | `caddy_data` was recreated | `docker volume ls` MUST show `caddy_caddy_data`; check that the volume is still named in `compose.yaml` |

@@ -1,7 +1,8 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and
-# `sshd-tunnel` is the one piece of server setup with a target: a single line
-# that must be typed exactly, so it is not typed. `install` is the first
+# wire it into the current user's Claude Code as a personal skill, and two
+# targets set up a machine rather than build anything: `sshd-tunnel` on the
+# server and `omlx-tunnel` on the house machine — each a single line that
+# must be typed exactly, so it is not typed. `install` is the first
 # target: a bare `make` installs.
 
 SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
@@ -11,7 +12,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: install sshd-tunnel uninstall
+.PHONY: install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -36,3 +37,35 @@ uninstall:
 # the last line prints the settings sshd actually runs with.
 sshd-tunnel:
 	ssh $(ROOT) 'printf "GatewayPorts clientspecified\nClientAliveInterval 30\nClientAliveCountMax 3\n" > /etc/ssh/sshd_config.d/10-tunnel.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(gatewayports|clientaliveinterval|clientalivecountmax) "'
+
+# The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
+# open, so every container here — and the proxy, for omlx.ai-at-home.de —
+# reaches the model host at 172.17.0.1:18000 (servers/vserver.md, "Tunnels
+# from the house"). It lives in this repository rather than in an
+# application's Makefile because more than one caller rides it: whoever owned
+# it could take the others down by uninstalling. macOS only — launchd is what
+# brings the tunnel back after a reboot, with no login shell to start it.
+TUNNEL_AGENT  = com.andygeiss.omlx-tunnel
+TUNNEL_REMOTE = andygeiss@vserver
+TUNNEL_BIND   = 172.17.0.1:18000
+TUNNEL_LOCAL  = 127.0.0.1:8000
+TUNNEL_PLIST  = $(HOME)/Library/LaunchAgents/$(TUNNEL_AGENT).plist
+TUNNEL_LOG    = $(HOME)/Library/Logs/$(TUNNEL_AGENT).log
+
+# Runs twice safely: the plist is rewritten, the running agent booted out, and
+# the last line prints the state and pid launchd actually has. Two options
+# carry the tunnel rather than decorate it — ExitOnForwardFailure, so a
+# refused bind kills the ssh instead of leaving one up that forwards nothing,
+# and KeepAlive, so launchd starts it again.
+omlx-tunnel:
+	mkdir -p '$(HOME)/Library/LaunchAgents'
+	printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n\t<key>Label</key><string>%s</string>\n\t<key>ProgramArguments</key>\n\t<array>\n\t\t<string>/usr/bin/ssh</string>\n\t\t<string>-N</string>\n\t\t<string>-o</string><string>BatchMode=yes</string>\n\t\t<string>-o</string><string>ExitOnForwardFailure=yes</string>\n\t\t<string>-o</string><string>ServerAliveInterval=30</string>\n\t\t<string>-o</string><string>ServerAliveCountMax=3</string>\n\t\t<string>-R</string><string>%s</string>\n\t\t<string>%s</string>\n\t</array>\n\t<key>RunAtLoad</key><true/>\n\t<key>KeepAlive</key><true/>\n\t<key>ThrottleInterval</key><integer>10</integer>\n\t<key>StandardErrorPath</key><string>%s</string>\n</dict>\n</plist>\n' '$(TUNNEL_AGENT)' '$(TUNNEL_BIND):$(TUNNEL_LOCAL)' '$(TUNNEL_REMOTE)' '$(TUNNEL_LOG)' > '$(TUNNEL_PLIST)'
+	launchctl bootout gui/$$(id -u)/$(TUNNEL_AGENT) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) '$(TUNNEL_PLIST)'
+	launchctl print gui/$$(id -u)/$(TUNNEL_AGENT) | grep -E '^\s(state|pid) ='
+
+# Stops the tunnel and forgets it. bootout alone is not enough: the plist would
+# still be in LaunchAgents, and the next login would start it again.
+omlx-tunnel-stop:
+	launchctl bootout gui/$$(id -u)/$(TUNNEL_AGENT) 2>/dev/null || true
+	rm -f '$(TUNNEL_PLIST)'

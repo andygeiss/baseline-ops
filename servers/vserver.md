@@ -1,6 +1,6 @@
 # Server: vserver
 
-**Last verified: 2026-08-27**
+**Last verified: 2026-09-07**
 
 One small Linux VPS. It builds and runs every application, terminates TLS, and
 holds every secret. There is exactly one of these; when a second server exists,
@@ -34,8 +34,9 @@ a compromised host — rotate it, do not reason about blast radius.
 
 The house network has no public address (a CGNAT WAN), so this server cannot
 open a connection to a machine in it. A house machine opens one instead, with
-`ssh -R`, and carries its service in: the application's Makefile owns that
-command, because the application knows which service and which port.
+`ssh -R`, and carries its service in. The command belongs to the service being
+carried rather than to whoever calls it — `make omlx-tunnel` in this repository
+owns the one tunnel there is.
 
 The server's part is one sshd drop-in, `/etc/ssh/sshd_config.d/10-tunnel.conf`,
 which `make sshd-tunnel` in this repository writes:
@@ -71,11 +72,13 @@ Turn the credential on before the site file exists, not after. The proxy asks
 Let's Encrypt for the certificate the moment it reads the site, every
 certificate issued is written to a public log, and scanners read those logs.
 
-**One tunnel, more than one caller.** `com.andygeiss.kai-tunnel`, in
-kai-orchestrator's Makefile, is what opens the oMLX tunnel, and
-`omlx.ai-at-home.de` rides the same one. Removing that application would take
-the site down with it. A tunnel with two callers belongs to the house service
-rather than to one of them; moving it there is not done yet.
+**One tunnel, more than one caller.** `com.andygeiss.omlx-tunnel` — a launchd
+agent on the house Mac, written by `make omlx-tunnel` in this repository — is
+what opens the oMLX tunnel. Both `omlx.ai-at-home.de` and any container that
+calls the model host ride it. It was kai-orchestrator's until 2026-09-07:
+removing that application would have taken the site down with it, so the tunnel
+moved here first and the site never noticed. A tunnel with two callers belongs
+to the house service, never to one of its callers.
 
 ## What is installed
 

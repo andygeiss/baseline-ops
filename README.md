@@ -46,12 +46,14 @@ make uninstall  # removes the symlink
 
 ```sh
 make sshd-tunnel    # once per server: let a house machine's ssh -R bind docker0
+make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
 ```
 
-The only host change with a target so far. It is here and not in an
-application's Makefile because it changes the server, and it exists because
-[servers/vserver.md](servers/vserver.md) says a house machine may carry a
-service in over SSH — "Tunnels from the house".
+Two targets, one per side of the same tunnel: the server's sshd drop-in and the
+Mac's launchd agent (`make omlx-tunnel-stop` takes that one away again). Neither
+is in an application's Makefile, because neither belongs to an application —
+[servers/vserver.md](servers/vserver.md), "Tunnels from the house", says why a
+house machine carries a service in over SSH, and who owns the command.
 
 Two stacks are the server's own rather than an application's, and this
 repository deploys them: [`caddy/`](caddy/), the one proxy every application
@@ -70,7 +72,7 @@ baseline-ops/
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server), make omlx-tunnel (house Mac)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
