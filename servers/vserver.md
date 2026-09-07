@@ -72,13 +72,15 @@ Turn the credential on before the site file exists, not after. The proxy asks
 Let's Encrypt for the certificate the moment it reads the site, every
 certificate issued is written to a public log, and scanners read those logs.
 
-**One tunnel, more than one caller.** `com.andygeiss.omlx-tunnel` — a launchd
-agent on the house Mac, written by `make omlx-tunnel` in this repository — is
-what opens the oMLX tunnel. Both `omlx.ai-at-home.de` and any container that
-calls the model host ride it. It was kai-orchestrator's until 2026-09-07:
-removing that application would have taken the site down with it, so the tunnel
-moved here first and the site never noticed. A tunnel with two callers belongs
-to the house service, never to one of its callers.
+**The tunnel belongs to the service, never to one of its callers.**
+`com.andygeiss.omlx-tunnel` — a launchd agent on the house Mac, written by
+`make omlx-tunnel` in this repository — is what opens it. It was
+kai-orchestrator's until 2026-09-07. That application and `omlx.ai-at-home.de`
+were both riding it by then, so removing the one would have taken the other
+down: the tunnel moved here first, and the site never noticed. The application
+was decommissioned the same day, which leaves the proxy site as the only caller
+today. A container that wants the model host joins the tunnel rather than
+owning it.
 
 ## What is installed
 

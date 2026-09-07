@@ -39,12 +39,13 @@ sshd-tunnel:
 	ssh $(ROOT) 'printf "GatewayPorts clientspecified\nClientAliveInterval 30\nClientAliveCountMax 3\n" > /etc/ssh/sshd_config.d/10-tunnel.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(gatewayports|clientaliveinterval|clientalivecountmax) "'
 
 # The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
-# open, so every container here — and the proxy, for omlx.ai-at-home.de —
-# reaches the model host at 172.17.0.1:18000 (servers/vserver.md, "Tunnels
-# from the house"). It lives in this repository rather than in an
-# application's Makefile because more than one caller rides it: whoever owned
-# it could take the others down by uninstalling. macOS only — launchd is what
-# brings the tunnel back after a reboot, with no login shell to start it.
+# open, so the proxy — and any container on the server — reaches the model host
+# at 172.17.0.1:18000 (servers/vserver.md, "Tunnels from the house"). It lives
+# in this repository rather than in an application's Makefile because an
+# application that owned it could take the site down by uninstalling, which is
+# what nearly happened when kai-orchestrator was removed. macOS only — launchd
+# is what brings the tunnel back after a reboot, with no login shell to start
+# it.
 TUNNEL_AGENT  = com.andygeiss.omlx-tunnel
 TUNNEL_REMOTE = andygeiss@vserver
 TUNNEL_BIND   = 172.17.0.1:18000
