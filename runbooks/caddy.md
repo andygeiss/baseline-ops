@@ -65,6 +65,39 @@ curl -sI https://todo.example.com | head -1     # 200, and a real certificate
 A `502` means Caddy is fine and the upstream is not: the application is not on
 `web`, or its alias is not the name in the site file.
 
+## A site for a tunnelled service
+
+A service in the house reaches this server through an `ssh -R` tunnel, which
+binds `172.17.0.1` — the `docker0` address
+([vserver.md](../servers/vserver.md), "Tunnels from the house"). The proxy
+reaches it there like any other upstream, so the site file names an address and
+a port instead of a container, and lists the paths it publishes:
+
+```sh
+ssh andygeiss@vserver "printf 'omlx.ai-at-home.de {\n\tencode zstd gzip\n\n\thandle /v1/* {\n\t\treverse_proxy 172.17.0.1:18000\n\t}\n\n\thandle {\n\t\trespond 404\n\t}\n}\n' > /opt/caddy/sites/omlx.caddy"
+ssh andygeiss@vserver 'cd /opt/caddy \
+    && docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile \
+    && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
+```
+
+`/v1/*` is oMLX's inference API, and it is all this site publishes. The proxy
+answers `404` to everything else the service serves — including the admin API
+that changes which models run. `handle` blocks are tried in the order they are
+written, so the catch-all goes last.
+
+The service checks the caller's key itself — the proxy holds no secret. Check
+that, and the path that must not be there:
+
+```sh
+curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/v1/models   # 401
+curl -so /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $KEY" \
+    https://omlx.ai-at-home.de/v1/models                                      # 200
+curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/admin/      # 404
+```
+
+Streaming survives `encode`: a token reaches the caller as the model produces
+it, compressed or not, so no site needs `flush_interval`.
+
 ## Remove a site
 
 ```sh
@@ -97,6 +130,7 @@ upgrade.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `502` on one site | The upstream is unreachable: the app is not on `web`, or the alias in the site file is not the alias in the app's `compose.yaml` | `docker network inspect web` lists who is on it and under which names |
+| `502` on a tunnelled site | The house machine's `ssh -R` is gone | `ss -lntp \| grep 18000` on the server says whether the tunnel is still bound; `make tunnel` on that machine opens it again |
 | `validate` fails | A site file with a typo, or two files claiming one domain | The message names the file and line; fix it, then reload |
 | A site answers with the wrong certificate, or a self-signed one | The domain in the site file does not resolve to this server, so Let's Encrypt refused | `dig +short <domain>`; fix DNS, then `reload` |
 | Certificate errors after an upgrade | `caddy_data` was recreated | `docker volume ls` MUST show `caddy_caddy_data`; check that the volume is still named in `compose.yaml` |

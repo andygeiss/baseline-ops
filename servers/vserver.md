@@ -48,10 +48,34 @@ ClientAliveCountMax 3           # … and the port freed for the reconnect
 
 The tunnel MUST bind `172.17.0.1` — the `docker0` address — and nothing else.
 A container cannot reach the host's loopback, so `127.0.0.1` is useless to it;
-`0.0.0.0` would publish the house service to the internet, and the services
-carried in this way send no API key. `172.17.0.1` is reachable by every
-container on this host and by nothing outside it. Ports below 10000 are taken
-or reserved; a tunnel uses 18000 and up.
+`0.0.0.0` would publish the house service to the internet with nothing in front
+of it. `172.17.0.1` is reachable by every container on this host and by nothing
+outside it. Ports below 10000 are taken or reserved; a tunnel uses 18000 and
+up.
+
+### Publishing one through the proxy
+
+A tunnelled service MAY also get a site on the proxy, so a caller outside the
+house reaches it over HTTPS. `omlx.ai-at-home.de` is the first one —
+[runbooks/caddy.md](../runbooks/caddy.md), "A site for a tunnelled service".
+Two rules come with it, because the address stops being private:
+
+- **The service MUST check a credential of its own.** The proxy holds none.
+  Every container on this host can already reach the tunnel, and a site adds
+  the internet to that list.
+- **The site file MUST name the paths it publishes**, and answer `404` to the
+  rest. A model host also serves an admin API that changes which models run.
+  That one stays in the house.
+
+Turn the credential on before the site file exists, not after. The proxy asks
+Let's Encrypt for the certificate the moment it reads the site, every
+certificate issued is written to a public log, and scanners read those logs.
+
+**One tunnel, more than one caller.** `com.andygeiss.kai-tunnel`, in
+kai-orchestrator's Makefile, is what opens the oMLX tunnel, and
+`omlx.ai-at-home.de` rides the same one. Removing that application would take
+the site down with it. A tunnel with two callers belongs to the house service
+rather than to one of them; moving it there is not done yet.
 
 ## What is installed
 
