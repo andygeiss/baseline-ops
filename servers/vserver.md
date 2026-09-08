@@ -54,6 +54,12 @@ of it. `172.17.0.1` is reachable by every container on this host and by nothing
 outside it. Ports below 10000 are taken or reserved; a tunnel uses 18000 and
 up.
 
+**The house machine sleeps.** The Mac that runs oMLX is a laptop, and it is
+offline at night, so `omlx.ai-at-home.de` answers `502` until it wakes. That is
+the ordinary state, not a fault — the launchd agent reopens the tunnel by itself
+when the machine comes back. A `502` in the middle of the working day is worth
+chasing; a `502` at 03:00 is the laptop.
+
 ### Publishing one through the proxy
 
 A tunnelled service MAY also get a site on the proxy, so a caller outside the
