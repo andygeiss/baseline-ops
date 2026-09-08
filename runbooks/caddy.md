@@ -1,6 +1,6 @@
 # Runbook: The proxy
 
-**Last verified: 2026-08-27**
+**Last verified: 2026-09-08**
 
 One Caddy container fronts every application on
 [vserver](../servers/vserver.md). It holds `:80` and `:443`, gets and renews
@@ -69,34 +69,55 @@ A `502` means Caddy is fine and the upstream is not: the application is not on
 
 A service in the house reaches this server through an `ssh -R` tunnel, which
 binds `172.17.0.1` — the `docker0` address
-([vserver.md](../servers/vserver.md), "Tunnels from the house"). The proxy
-reaches it there like any other upstream, so the site file names an address and
-a port instead of a container, and lists the paths it publishes:
+([vserver.md](../servers/vserver.md), "Tunnels from the house"). The `tunnel`
+snippet in `Caddyfile` holds everything that is true of every such service, so
+the site file names only a domain and the port the tunnel binds:
 
 ```sh
-ssh andygeiss@vserver "printf 'omlx.ai-at-home.de {\n\tencode zstd gzip\n\n\thandle /v1/* {\n\t\treverse_proxy 172.17.0.1:18000\n\t}\n\n\thandle {\n\t\trespond 404\n\t}\n}\n' > /opt/caddy/sites/omlx.caddy"
+ssh andygeiss@vserver "printf 'omlx.ai-at-home.de {\n\timport tunnel 18000\n}\n' > /opt/caddy/sites/omlx.caddy"
 ssh andygeiss@vserver 'cd /opt/caddy \
     && docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile \
     && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
 ```
 
-`/v1/*` is oMLX's inference API, and it is all this site publishes. The proxy
+`/v1/*` is oMLX's inference API, and it is all the snippet publishes. The proxy
 answers `404` to everything else the service serves — including the admin API
 that changes which models run. `handle` blocks are tried in the order they are
 written, so the catch-all goes last.
 
-The service checks the caller's key itself — the proxy holds no secret. Check
-that, and the path that must not be there:
+The snippet also refuses a request whose `Authorization` header is missing, or
+is anything other than a bearer token: `401`, and the connection closed. That is
+not authentication. The proxy
+holds no secret and cannot tell a real key from a made-up one; it checks the
+shape of the credential and nothing else. It is there because this upstream is
+not a container on this host. It is one ssh connection to a machine on a home
+line, every request that connection carries makes the real ones wait, and a
+flood with no token is the cheapest way to fill it. So the proxy answers that
+one itself.
+
+The service still checks the key. The check that proves it now sends a *wrong*
+token rather than none, because the proxy answers a missing one before the
+service ever sees it:
 
 ```sh
-curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/v1/models   # 401
+curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/v1/models   # 401, from the proxy
+curl -so /dev/null -w '%{http_code}\n' -H "Authorization: Bearer nope" \
+    https://omlx.ai-at-home.de/v1/models                                      # 401, from the service
 curl -so /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $KEY" \
     https://omlx.ai-at-home.de/v1/models                                      # 200
 curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/admin/      # 404
 ```
 
 Streaming survives `encode`: a token reaches the caller as the model produces
-it, compressed or not, so no site needs `flush_interval`.
+it, compressed or not, so no site needs `flush_interval`. It survives the
+timeouts in `Caddyfile` too, and only because none of them is a `write` timeout.
+Read the comment there before adding one.
+
+A flood that carries a token, or one aimed at the TLS handshake rather than at
+the service, never reaches any of this: Caddy has already paid for the
+connection by the time it can refuse the request. The kernel is what refuses
+that one — [vserver.md](../servers/vserver.md), "Limits on what one address may
+open".
 
 ## Remove a site
 
@@ -131,6 +152,7 @@ upgrade.
 |---|---|---|
 | `502` on one site | The upstream is unreachable: the app is not on `web`, or the alias in the site file is not the alias in the app's `compose.yaml` | `docker network inspect web` lists who is on it and under which names |
 | `502` on a tunnelled site | The house machine's `ssh -R` is gone | `ss -lntp \| grep 18000` on the server says whether the tunnel is still bound; `make omlx-tunnel` on that machine opens it again |
+| `401` on a tunnelled site, with a key you know is good | The client is not sending `Authorization: Bearer <key>` — the proxy turns away anything that is not a bearer token, before the service sees it | `curl -v` shows the header the client actually sent; the scheme may be any case, but the token MUST follow it |
 | `validate` fails | A site file with a typo, or two files claiming one domain | The message names the file and line; fix it, then reload |
 | A site answers with the wrong certificate, or a self-signed one | The domain in the site file does not resolve to this server, so Let's Encrypt refused | `dig +short <domain>`; fix DNS, then `reload` |
 | Certificate errors after an upgrade | `caddy_data` was recreated | `docker volume ls` MUST show `caddy_caddy_data`; check that the volume is still named in `compose.yaml` |

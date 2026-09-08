@@ -13,17 +13,96 @@
 # /opt/todo and `name:` in its compose.yaml. reverse_proxy reaches it by that
 # name; the application publishes no port at all.
 #
+# A service the house carries in over ssh imports `tunnel` instead, and names
+# the port the tunnel binds on docker0:
+#
+#     omlx.example.com {
+#     	import tunnel 18000
+#     }
+#
 # A service that is not built on the template answers on its own port, so its
-# site file writes the two lines itself instead of importing the snippet:
+# site file writes the two lines itself instead of importing a snippet:
 #
 #     portainer.example.com {
 #     	encode zstd gzip
 #     	reverse_proxy portainer:9000
 #     }
 
+# What a flood costs before Caddy can refuse it. read_header hangs up on a
+# client that opens a connection and then dribbles one header byte at a time.
+# idle frees a socket someone holds open for nothing, four and a half minutes
+# sooner than Caddy's own default does.
+#
+# There is deliberately no `write` timeout. Caddy measures it over the whole
+# response, so any value short enough to help would cut a model off mid-answer.
+{
+	servers {
+		timeouts {
+			read_header 5s
+			read_body 10s
+			idle 30s
+		}
+		max_header_size 16KB
+	}
+}
+
 (site) {
 	encode zstd gzip
 	reverse_proxy {args[0]}:8080
+}
+
+# A service the house carries in over ssh, published at its inference API and
+# nowhere else. {args[0]} is the port the tunnel binds on docker0 —
+# servers/vserver.md, "Tunnels from the house".
+(tunnel) {
+	encode zstd gzip
+
+	# Case-insensitive because RFC 7235 says the scheme is: a client that sends
+	# `bearer` is a correct client, and a shape check that turns it away is a
+	# bug. The regexp sits in backticks because that is Caddy's raw string, so
+	# nothing in it has to be escaped twice.
+	@unauthenticated not header_regexp Authorization `(?i)^Bearer\s+\S`
+
+	handle /v1/* {
+		# `route` keeps these three in the order they are written. Caddy would
+		# otherwise sort them by its own directive order, and the order is the
+		# point: refuse first, proxy last.
+		route {
+			# A generous text prompt, and far too small for base64 images. This
+			# is the line to raise if the service ever takes those.
+			request_body {
+				max_size 2MB
+			}
+
+			# A request with no credential never crosses the tunnel. The service
+			# is one ssh connection away in the house, and every request that
+			# connection carries slows down the ones that are real. The proxy
+			# still holds no secret: this checks the shape of the credential,
+			# never its value. `close` hangs up after the 401, so a flood pays
+			# for a new TLS handshake on every try.
+			respond @unauthenticated 401 {
+				close
+			}
+
+			reverse_proxy 172.17.0.1:{args[0]} {
+				# A wedged tunnel fails in two seconds instead of parking
+				# connections here. max_conns_per_host caps what sshd and the
+				# house machine ever see at once; past it Caddy queues rather
+				# than refuses, and the timeouts above are what drain the queue.
+				transport http {
+					dial_timeout 2s
+					max_conns_per_host 24
+					keepalive_idle_conns_per_host 8
+				}
+			}
+		}
+	}
+
+	# Everything else the service serves, including the admin API that changes
+	# which models run.
+	handle {
+		respond 404
+	}
 }
 
 import /etc/caddy/sites/*.caddy

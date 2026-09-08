@@ -1,6 +1,6 @@
 # Server: vserver
 
-**Last verified: 2026-09-07**
+**Last verified: 2026-09-08**
 
 One small Linux VPS. It builds and runs every application, terminates TLS, and
 holds every secret. There is exactly one of these; when a second server exists,
@@ -63,9 +63,12 @@ Two rules come with it, because the address stops being private:
 
 - **The service MUST check a credential of its own.** The proxy holds none.
   Every container on this host can already reach the tunnel, and a site adds
-  the internet to that list.
-- **The site file MUST name the paths it publishes**, and answer `404` to the
-  rest. A model host also serves an admin API that changes which models run.
+  the internet to that list. The proxy does turn away a request that carries no
+  bearer token at all, so a flood without one never crosses the tunnel — but
+  that is a check on the shape of the header, and it can no more tell a real key
+  from a made-up one than an open door can.
+- **The `tunnel` snippet names the paths it publishes**, and answers `404` to
+  the rest. A model host also serves an admin API that changes which models run.
   That one stays in the house.
 
 Turn the credential on before the site file exists, not after. The proxy asks
@@ -112,6 +115,125 @@ on this host. The password is long, and the socket itself is never published.
 behind a firewall that says otherwise.** A `ufw` rule does not stop it. That is
 why no application publishes a port: only Caddy has a `ports:` block, and it is
 meant to be public.
+
+### Limits on what one address may open
+
+**Not installed yet, as of 2026-09-08.** The proxy's half of this defence is
+live; these rules are not. Nothing in this section has run on this machine.
+
+Caddy can refuse a request, but only the kernel can refuse a connection. By the
+time Caddy sees anything the socket is accepted and the TLS handshake is paid
+for, and the handshake is the expensive part. So a flood is capped twice: at the
+proxy, which answers a request carrying no bearer token itself
+([runbooks/caddy.md](../runbooks/caddy.md), "A site for a tunnelled service"),
+and here.
+
+`DOCKER-USER` is the chain to write it in. Docker jumps to it from `FORWARD`
+before reaching its own rules, which is exactly what the `ufw` rule above does
+not do:
+
+```sh
+ssh root@vserver 'iptables -S FORWARD'
+-P FORWARD DROP
+-A FORWARD -j DOCKER-USER       # ← whatever is here is read first
+-A FORWARD -j DOCKER-FORWARD    # ← Docker's own published ports
+```
+
+Four rules go in it, so a script holds them. It is safe to run twice: `-C` asks
+whether a rule is already there, and only a missing one is inserted.
+
+```sh
+ssh root@vserver 'cat > /usr/local/sbin/conn-limits' <<'SCRIPT'
+#!/bin/sh
+# Per-address limits on the one public port. Safe to run twice: -C asks whether
+# the rule is already there, and only a missing one is inserted. Both families,
+# because an AAAA record is one DNS edit away and the rules should be waiting
+# when it lands.
+set -eu
+
+add()  { iptables  -C DOCKER-USER "$@" 2>/dev/null || iptables  -I DOCKER-USER "$@"; }
+add6() { ip6tables -C DOCKER-USER "$@" 2>/dev/null || ip6tables -I DOCKER-USER "$@"; }
+
+# How many connections one address may hold open at once. REJECT, not DROP: a
+# client that hits the cap learns so at once instead of waiting for a timeout.
+add  -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 32 \
+    -j REJECT --reject-with tcp-reset
+add6 -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 64 \
+    -j REJECT --reject-with tcp-reset
+
+# How fast it may open new ones. DROP here, because answering a flood is work.
+add  -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+    --hashlimit-name https --hashlimit-mode srcip \
+    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
+add6 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+    --hashlimit-name https6 --hashlimit-mode srcip \
+    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
+SCRIPT
+```
+
+The v6 mask is 64, not 128, because a /64 is the smallest block that means one
+customer: counting per single address counts nothing when whoever floods this
+server was handed 2^64 of them. Only IPv4 carries traffic today — the sites have
+no AAAA record — and the rules are there for the DNS edit that changes that.
+
+**The rules are gone after a reboot, and nothing announces it.**
+`iptables-persistent` is a package on the host, which is the thing this machine
+does not do. A systemd unit runs the script instead. It runs after Docker,
+because Docker is what creates `DOCKER-USER`:
+
+```sh
+ssh root@vserver 'chmod 0755 /usr/local/sbin/conn-limits \
+    && cat > /etc/systemd/system/conn-limits.service' <<'UNIT'
+[Unit]
+Description=Per-address connection limits on :443
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/conn-limits
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+ssh root@vserver 'systemctl daemon-reload && systemctl enable --now conn-limits \
+    && iptables -S DOCKER-USER && ip6tables -S DOCKER-USER'
+```
+
+**Check the chain is there before trusting any of this.** `iptables -S
+DOCKER-USER` MUST print a chain. If it prints nothing, this Engine runs its
+nftables backend, the chain answers to another name, and every rule above goes
+where nothing reads it. Engine 29.8.0 here still uses the iptables backend, and
+both `xt_connlimit` and `xt_hashlimit` load (checked 2026-09-08).
+
+**conntrack carries weight once these rules exist.** `connlimit` counts entries
+in it, and a full table drops every new connection on this host — including the
+ssh you would fix it from. There is room already; the point is noticing if that
+stops being true:
+
+```sh
+ssh andygeiss@vserver 'cat /proc/sys/net/netfilter/nf_conntrack_{count,max}'   # 30 of 262144
+```
+
+The sysctls that matter are mostly set. `net.ipv4.tcp_syncookies` is `1`, which
+is the real answer to a SYN flood, and `net.core.somaxconn` is `4096`. One is
+low: `net.ipv4.tcp_max_syn_backlog` is `512`, and `4096` in
+`/etc/sysctl.d/99-net.conf` would give a burst somewhere to wait before the
+kernel falls back to cookies. A small win, not a fix — syncookies keep this box
+up without it.
+
+**What these rules cannot do is count requests.** The kernel sees connections,
+and HTTP/2 carries hundreds of requests on one of them. Someone who opens a
+single socket walks past all four untouched. That is why the proxy's own check
+is the first line and this is the second, and not the other way round.
+
+One address misbehaving right now is one line, and one line to undo:
+
+```sh
+iptables -I DOCKER-USER -s 203.0.113.9 -j DROP    # -D in place of -I lets it back in
+```
 
 ## The `web` network
 
