@@ -15,7 +15,8 @@ and in the baseline when it changes the code:
 
 - **Last verified:** 2026-08-27
 - **Servers:** one — `vserver`. Everything here is written for it.
-- **Format:** Markdown, plus the templates every application copies. No code.
+- **Format:** Markdown, plus the templates every application copies and one
+  script the server runs. No application code.
 
 ## How to use this repository (AI agents)
 
@@ -46,14 +47,17 @@ make uninstall  # removes the symlink
 
 ```sh
 make sshd-tunnel    # once per server: let a house machine's ssh -R bind docker0
+make conn-limits    # once per server: cap what one address may open on :443
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
 ```
 
-Two targets, one per side of the same tunnel: the server's sshd drop-in and the
-Mac's launchd agent (`make omlx-tunnel-stop` takes that one away again). Neither
-is in an application's Makefile, because neither belongs to an application —
-[servers/vserver.md](servers/vserver.md), "Tunnels from the house", says why a
-house machine carries a service in over SSH, and who owns the command.
+Three targets, and none of them an application's. Two are the two sides of one
+tunnel — the server's sshd drop-in and the Mac's launchd agent (`make
+omlx-tunnel-stop` takes that one away again); [servers/vserver.md](servers/vserver.md),
+"Tunnels from the house", says why a house machine carries a service in over
+SSH, and who owns the command. The third caps what a single address may open on
+the public port, in the one chain a published Docker port cannot walk around —
+same document, "Limits on what one address may open".
 
 Two stacks are the server's own rather than an application's, and this
 repository deploys them: [`caddy/`](caddy/), the one proxy every application
@@ -72,7 +76,7 @@ baseline-ops/
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel (server), make omlx-tunnel (house Mac)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits (server), make omlx-tunnel (house Mac)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
@@ -83,6 +87,7 @@ baseline-ops/
 │   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
+│   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
 │   └── vserver.md              ← the machine: what is installed, which accounts, which ports
 ├── SKILL.md                    ← makes the repo a Claude Code skill
 ├── templates/                  ← copied into each application repository

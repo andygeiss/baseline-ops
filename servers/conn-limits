@@ -1,0 +1,32 @@
+#!/bin/sh
+# Per-address limits on the one public port, in the chain Docker reads first.
+# `make conn-limits` in this repository ships this file and the systemd unit
+# that runs it; servers/vserver.md, "Limits on what one address may open", says
+# why each rule is the shape it is.
+#
+# Safe to run twice: -C asks whether a rule is already there, and only a missing
+# one is inserted.
+set -eu
+
+iptables -S DOCKER-USER >/dev/null 2>&1 || {
+	echo "conn-limits: no DOCKER-USER chain — this Engine is not on the iptables backend, see servers/vserver.md" >&2
+	exit 1
+}
+
+add()  { iptables  -C DOCKER-USER "$@" 2>/dev/null || iptables  -I DOCKER-USER "$@"; }
+add6() { ip6tables -C DOCKER-USER "$@" 2>/dev/null || ip6tables -I DOCKER-USER "$@"; }
+
+# How many connections one address may hold open at once. REJECT, not DROP: a
+# client that hits the cap learns so at once instead of waiting for a timeout.
+add  -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 32 \
+    -j REJECT --reject-with tcp-reset
+add6 -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 64 \
+    -j REJECT --reject-with tcp-reset
+
+# How fast it may open new ones. DROP here, because answering a flood is work.
+add  -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+    --hashlimit-name https --hashlimit-mode srcip \
+    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
+add6 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+    --hashlimit-name https6 --hashlimit-mode srcip \
+    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP

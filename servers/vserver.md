@@ -119,7 +119,8 @@ meant to be public.
 ### Limits on what one address may open
 
 **Not installed yet, as of 2026-09-08.** The proxy's half of this defence is
-live; these rules are not. Nothing in this section has run on this machine.
+live; these rules are not. `make conn-limits` in this repository is what changes
+that.
 
 Caddy can refuse a request, but only the kernel can refuse a connection. By the
 time Caddy sees anything the socket is accepted and the TLS handshake is paid
@@ -128,7 +129,7 @@ proxy, which answers a request carrying no bearer token itself
 ([runbooks/caddy.md](../runbooks/caddy.md), "A site for a tunnelled service"),
 and here.
 
-`DOCKER-USER` is the chain to write it in. Docker jumps to it from `FORWARD`
+`DOCKER-USER` is the chain the rules go in. Docker jumps to it from `FORWARD`
 before reaching its own rules, which is exactly what the `ufw` rule above does
 not do:
 
@@ -139,74 +140,29 @@ ssh root@vserver 'iptables -S FORWARD'
 -A FORWARD -j DOCKER-FORWARD    # ← Docker's own published ports
 ```
 
-Four rules go in it, so a script holds them. It is safe to run twice: `-C` asks
-whether a rule is already there, and only a missing one is inserted.
+Four rules, two per address family, and [conn-limits](conn-limits) holds them.
+One caps how many connections a single address may hold open at once — 64,
+`REJECT` with a reset, so a client that hits the cap learns at once instead of
+waiting for a timeout. The other caps how fast it may open new ones — 30 a
+second, bursting to 60, `DROP`, because answering a flood is work.
 
-```sh
-ssh root@vserver 'cat > /usr/local/sbin/conn-limits' <<'SCRIPT'
-#!/bin/sh
-# Per-address limits on the one public port. Safe to run twice: -C asks whether
-# the rule is already there, and only a missing one is inserted. Both families,
-# because an AAAA record is one DNS edit away and the rules should be waiting
-# when it lands.
-set -eu
-
-add()  { iptables  -C DOCKER-USER "$@" 2>/dev/null || iptables  -I DOCKER-USER "$@"; }
-add6() { ip6tables -C DOCKER-USER "$@" 2>/dev/null || ip6tables -I DOCKER-USER "$@"; }
-
-# How many connections one address may hold open at once. REJECT, not DROP: a
-# client that hits the cap learns so at once instead of waiting for a timeout.
-add  -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 32 \
-    -j REJECT --reject-with tcp-reset
-add6 -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 64 \
-    -j REJECT --reject-with tcp-reset
-
-# How fast it may open new ones. DROP here, because answering a flood is work.
-add  -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
-    --hashlimit-name https --hashlimit-mode srcip \
-    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
-add6 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
-    --hashlimit-name https6 --hashlimit-mode srcip \
-    --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
-SCRIPT
-```
-
-The v6 mask is 64, not 128, because a /64 is the smallest block that means one
-customer: counting per single address counts nothing when whoever floods this
-server was handed 2^64 of them. Only IPv4 carries traffic today — the sites have
-no AAAA record — and the rules are there for the DNS edit that changes that.
+The IPv6 mask is 64 rather than 128, because a /64 is the smallest block that
+means one customer: counting per single address counts nothing when whoever
+floods this server was handed 2^64 of them. Only IPv4 carries traffic today —
+the sites have no AAAA record — and the v6 rules are there for the DNS edit that
+changes that.
 
 **The rules are gone after a reboot, and nothing announces it.**
 `iptables-persistent` is a package on the host, which is the thing this machine
-does not do. A systemd unit runs the script instead. It runs after Docker,
-because Docker is what creates `DOCKER-USER`:
-
-```sh
-ssh root@vserver 'chmod 0755 /usr/local/sbin/conn-limits \
-    && cat > /etc/systemd/system/conn-limits.service' <<'UNIT'
-[Unit]
-Description=Per-address connection limits on :443
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/sbin/conn-limits
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-ssh root@vserver 'systemctl daemon-reload && systemctl enable --now conn-limits \
-    && iptables -S DOCKER-USER && ip6tables -S DOCKER-USER'
-```
+does not do, so a systemd unit runs the script instead. `make conn-limits` ships
+both, and the unit runs after Docker, because Docker is what creates the chain.
 
 **Check the chain is there before trusting any of this.** `iptables -S
-DOCKER-USER` MUST print a chain. If it prints nothing, this Engine runs its
-nftables backend, the chain answers to another name, and every rule above goes
-where nothing reads it. Engine 29.8.0 here still uses the iptables backend, and
-both `xt_connlimit` and `xt_hashlimit` load (checked 2026-09-08).
+DOCKER-USER` MUST print a chain — the script refuses to run when it does not. If
+it prints nothing, this Engine runs its nftables backend, the chain answers to
+another name, and every rule above would go where nothing reads it. Engine
+29.8.0 here still uses the iptables backend, and both `xt_connlimit` and
+`xt_hashlimit` load (checked 2026-09-08).
 
 **conntrack carries weight once these rules exist.** `connlimit` counts entries
 in it, and a full table drops every new connection on this host — including the

@@ -1,8 +1,8 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and two
-# targets set up a machine rather than build anything: `sshd-tunnel` on the
-# server and `omlx-tunnel` on the house machine — each a single line that
-# must be typed exactly, so it is not typed. `install` is the first
+# wire it into the current user's Claude Code as a personal skill, and three
+# targets set up a machine rather than build anything: `sshd-tunnel` and
+# `conn-limits` on the server, `omlx-tunnel` on the house machine — each a line
+# that must be typed exactly, so it is not typed. `install` is the first
 # target: a bare `make` installs.
 
 SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
@@ -12,7 +12,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
+.PHONY: conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -37,6 +37,20 @@ uninstall:
 # the last line prints the settings sshd actually runs with.
 sshd-tunnel:
 	ssh $(ROOT) 'printf "GatewayPorts clientspecified\nClientAliveInterval 30\nClientAliveCountMax 3\n" > /etc/ssh/sshd_config.d/10-tunnel.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(gatewayports|clientaliveinterval|clientalivecountmax) "'
+
+# Caps how many connections one address may hold open on :443, and how fast it
+# may open them, in DOCKER-USER — the chain Docker reads before its own
+# published ports (servers/vserver.md, "Limits on what one address may open").
+# The rules go in a script rather than this line, because there are four of them
+# and they have to survive a reboot; the unit runs the script after Docker,
+# which is what creates the chain. Runs twice safely: the script inserts only a
+# rule that is missing, and the last line prints the rules the kernel actually
+# has.
+conn-limits:
+	scp servers/conn-limits $(ROOT):/usr/local/sbin/conn-limits
+	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/conn-limits && sh -n /usr/local/sbin/conn-limits'
+	ssh $(ROOT) 'printf "%s\n" "[Unit]" "Description=Per-address connection limits on :443" "After=docker.service" "Requires=docker.service" "" "[Service]" "Type=oneshot" "RemainAfterExit=yes" "ExecStart=/usr/local/sbin/conn-limits" "" "[Install]" "WantedBy=multi-user.target" > /etc/systemd/system/conn-limits.service'
+	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now conn-limits && iptables -S DOCKER-USER && ip6tables -S DOCKER-USER'
 
 # The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
 # open, so the proxy — and any container on the server — reaches the model host
