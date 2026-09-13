@@ -1,6 +1,6 @@
 # Server: vserver
 
-**Last verified: 2026-09-08**
+**Last verified: 2026-09-13**
 
 One small Linux VPS. It builds and runs every application, terminates TLS, and
 holds every secret. There is exactly one of these; when a second server exists,
@@ -266,10 +266,20 @@ an image, not in a tarball, not in a Compose `environment:` block —
 Two things grow without asking: images and logs.
 
 - **Images.** Every deploy builds a new one and the old ones stay, which is what
-  makes rollback instant. Delete them by tag when the disk gets tight, oldest
-  first. Never `docker image prune -a` — it removes the tagged images rollback
-  depends on. `docker image prune` (no `-a`) removes only dangling layers and is
-  safe.
+  makes rollback instant. Each is named after its application, `<app>:<version>`,
+  so one application's build can never replace another's image. Delete them by
+  tag when the disk gets tight, oldest first. Never `docker image prune -a` — it
+  removes the tagged images rollback depends on. `docker image prune` (no `-a`)
+  removes only dangling layers and is safe.
+
+  **Not moved yet, as of 2026-09-13.** `game` and `lysk` were deployed while the
+  template named every image `app:`, and still build under it until their
+  `compose.yaml` is copied again. Between them they hold `app:v0.1.0` to
+  `app:v0.13.0`, told apart by the project label Compose wrote on each — `game`
+  the `v0.1` and `v0.2` lines, `lysk` `v0.3.0` upward — except `app:v0.1.1`,
+  which has no label because it was rebuilt by hand from the game's tag during
+  a recovery on 2026-09-11. [runbooks/deploy.md](../runbooks/deploy.md),
+  "Moving off the shared `app:` name", is the move.
 - **Logs.** Docker's default `json-file` driver rotates nothing, which is why
   every service in the template sets `max-size` and `max-file`. A service
   without that block will fill this disk eventually.

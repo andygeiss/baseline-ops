@@ -1,6 +1,6 @@
 # Runbook: Deploy a release
 
-**Last verified: 2026-08-27**
+**Last verified: 2026-09-13**
 
 Ship a tagged version of an application to [vserver](../servers/vserver.md), or
 put an older one back. The server builds what it runs; nothing here needs Docker
@@ -75,8 +75,8 @@ ssh andygeiss@vserver 'cd /opt/<app> && echo IMAGE_TAG=v1.2.2 > .env \
 ```
 
 It works because building never deletes anything: the previous image is still in
-the server's image store under its own tag. Graceful shutdown makes the swap
-invisible.
+the server's image store as `<app>:v1.2.2`, under the application's own name and
+its own tag. Graceful shutdown makes the swap invisible.
 
 **`--no-build` is load-bearing here.** Without it, an image the server no longer
 has is rebuilt from whatever sits in `src/` right now — which is the *new*
@@ -86,6 +86,52 @@ and the fix is to deploy that tag from source again:
 ```sh
 git checkout v1.2.2      # then the deploy steps above
 ```
+
+## Moving off the shared `app:` name
+
+Once, for an application deployed before 2026-09-13. Until then the template
+named every application's image `app:<version>`, so the host holds that
+application's earlier versions under `app:` and nothing under `<app>:`. The move
+is three steps, and the version running never changes.
+
+1. **In the application's repository**, bring the template's two changes into
+   `compose.yaml` — the `image:` line with the comment above it, and the
+   sentence the header gained — and commit. Only those: copying the whole
+   template again undoes the application's own edits, such as the `secrets:`
+   blocks an application without secrets deletes.
+2. **Give the application's old images the new name**, keyed by the label
+   Compose wrote on each:
+
+   ```sh
+   ssh andygeiss@vserver 'for t in $(docker images app --format "{{.Tag}}"); do
+     [ "$(docker image inspect -f "{{index .Config.Labels \"com.docker.compose.project\"}}" app:$t)" = <app> ] \
+       && docker tag app:$t <app>:$t; done; docker images <app>'
+   ```
+
+3. **Start the running version under its new name**, from the new
+   `compose.yaml`:
+
+   ```sh
+   scp compose.yaml andygeiss@vserver:/opt/<app>/
+   ssh andygeiss@vserver 'cd /opt/<app> && docker compose up -d --no-build && docker compose ps'
+   ```
+
+   `docker compose ps` names `<app>:<version>`, the version `.env` already
+   held: the container is recreated from the same image under its new name,
+   which proves step 2 now rather than during a rollback. The next deploy
+   builds under the new name without being told.
+
+- **The label decides whose an image is.** Compose writes the project's name
+  onto every image it builds, so the loop takes this application's images and
+  leaves every other application's alone.
+- **An image built by hand has no label** — a `docker build -t app:v1.2.2`
+  run to recover a lost tag, say — so the loop skips it. Tag it yourself, and
+  only if you know whose it is.
+- **A version two applications both built is the last one's.** The first
+  build's image lost that tag the moment the second was built, and the label
+  names whoever built it last.
+- **`docker tag` only adds a name**, so the `app:` names can stay until no
+  rollback needs them, and go by tag after that — never `docker image prune -a`.
 
 ## When it goes wrong
 
@@ -97,5 +143,6 @@ git checkout v1.2.2      # then the deploy steps above
 | `docker compose ps` says `unhealthy` | `/healthz` is failing: the database is unreachable or the app never bound its port | `docker compose logs app`; check the `data` volume exists |
 | The version at `/healthz` changes on every restart | `.git` did not reach the build context, so the build carries no VCS metadata and the reader falls back to a per-boot id | Check the tarball's excludes and `.dockerignore`; `git` must also be installed in the build stage |
 | Version reports `unknown` at `/healthz` | Not a deploy fault: the binary is using the CLI version reader, which anything serving `immutable` assets must not | The application's bug — baseline `patterns/go-performance.md` has the three-case reader it needs |
+| A rollback says the image does not exist, while `docker images app` lists that version | The version was built while the template named every image `app:` | *Moving off the shared `app:` name* above; if the image is not this application's, deploy that tag from source |
 | `502` from the proxy after a deploy | The app is not on the `web` network, or its alias changed | `compose.yaml` MUST carry the `networks:` block from the template, alias = `<app>`; [caddy.md](caddy.md) has the rest |
 | Certificate errors after a deploy | Not this deploy's doing: an application never touches TLS | The proxy's own runbook, [caddy.md](caddy.md) |

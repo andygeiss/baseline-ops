@@ -1,6 +1,6 @@
 # Runbook: Put an application on the server
 
-**Last verified: 2026-08-27**
+**Last verified: 2026-09-13**
 
 Do this once per application. Afterwards every release is
 [deploy.md](deploy.md).
@@ -33,6 +33,13 @@ alias equal to its own name, so two projects on one network both answer to
 `app`. Naming the alias after the project — the same name as `/opt/<app>` and
 `name:` in the file — is what keeps the proxy's `reverse_proxy todo:8080`
 pointing at the right container.
+
+**The image needs no edit, for the same reason.** Its name is
+`${COMPOSE_PROJECT_NAME}`, which Compose sets from `name:`, so `todo` builds
+`todo:v1.2.3`. Every application once built `app:<version>`, one name for the
+whole host: when two of them tagged the same version, the second build replaced
+the first one's image, and a later `--no-build` rollback started the other
+application under this one's name and site.
 
 ## 2. Point the domain at the server
 

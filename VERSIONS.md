@@ -26,6 +26,10 @@ code rather than the server.
 - **An application's own image is tagged with the exact version `git describe`
   produces.** `:latest` MUST NOT appear anywhere: a tag that moves makes "what is
   running?" unanswerable and rollback impossible.
+- **An application's own image is named after the application** —
+  `<app>:<version>`, from the Compose project's name. Two applications MUST NOT
+  build under one name: the second build to tag a version replaces the first's
+  image, and a rollback then starts the wrong application.
 - **Docker Engine follows the current stable release.** It is the one piece of
   software installed on the host, so it is also the one that must never be a
   surprise: read the release notes before bumping a major.
