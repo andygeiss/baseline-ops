@@ -272,14 +272,17 @@ Two things grow without asking: images and logs.
   removes the tagged images rollback depends on. `docker image prune` (no `-a`)
   removes only dangling layers and is safe.
 
-  **Not moved yet, as of 2026-09-13.** `game` and `lysk` were deployed while the
-  template named every image `app:`, and still build under it until their
-  `compose.yaml` is copied again. Between them they hold `app:v0.1.0` to
-  `app:v0.13.0`, told apart by the project label Compose wrote on each — `game`
-  the `v0.1` and `v0.2` lines, `lysk` `v0.3.0` upward — except `app:v0.1.1`,
-  which has no label because it was rebuilt by hand from the game's tag during
-  a recovery on 2026-09-11. [runbooks/deploy.md](../runbooks/deploy.md),
-  "Moving off the shared `app:` name", is the move.
+  **Both applications moved on 2026-09-13**, by
+  [runbooks/deploy.md](../runbooks/deploy.md), "Moving off the shared `app:`
+  name". `game` runs `game:v0.2.7` and holds `game:v0.1.0` to `game:v0.2.7`;
+  `lysk` runs `lysk:v0.13.0` and holds `lysk:v0.3.0` to `lysk:v0.13.0`. Each
+  was re-tagged by the project label Compose wrote on the image, except
+  `game:v0.1.1`, whose image carries none — it was rebuilt by hand from the
+  game's tag during a recovery on 2026-09-11 — and was tagged by hand. The old
+  `app:` names still point at the same images, so they cost no disk. A tag
+  from before the move still ships a `compose.yaml` that names `app:`, which
+  is the one way back onto the shared name: redeploying such a tag from
+  source builds under it again.
 - **Logs.** Docker's default `json-file` driver rotates nothing, which is why
   every service in the template sets `max-size` and `max-file`. A service
   without that block will fill this disk eventually.
