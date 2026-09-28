@@ -72,6 +72,8 @@ yet — the steps have not run twice.
 baseline-ops/
 ├── .github/workflows/
 │   └── templates.yml           ← builds templates/Dockerfile against baseline-reference
+├── bin/
+│   └── deploy                  ← runbooks/deploy.md as one command: ship a tag, or roll back
 ├── caddy/                      ← the server's one proxy stack; deployed from here, copied by nobody
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml

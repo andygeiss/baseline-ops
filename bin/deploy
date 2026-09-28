@@ -1,0 +1,164 @@
+#!/bin/sh
+# deploy — ship a tagged version of an application to the server, or put an
+# older one back. runbooks/deploy.md is the manual; this is its steps, run the
+# same way every time.
+#
+#   deploy <version>              from the application's checkout
+#   deploy --rollback <version>   an image the server built before
+#
+# The application is the checkout's directory name, which is also the Compose
+# project and the directory on the server. DEPLOY_HOST picks the server.
+#
+# One file, two halves: the half on your machine packs the tag and sends it,
+# then sends this same file over ssh as the half that runs on the server.
+set -eu
+
+host=${DEPLOY_HOST:-andygeiss@vserver}
+root=${DEPLOY_ROOT:-/opt}   # where the applications live on the server
+keep=5                      # snapshots kept per application
+
+die() { printf 'deploy: %s\n' "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------- the server
+
+# healthy asks the running container which version it is. /healthz answers on
+# the ops port inside the container only, so the question goes through exec.
+healthy() {
+	docker compose exec -T app wget -qO- http://127.0.0.1:6060/healthz 2>/dev/null |
+		grep -q "\"version\":\"$1\""
+}
+
+# start runs one image the server already has, waits for its own healthcheck,
+# and checks that /healthz names that version. Writing .env comes first: it is
+# the record of what runs, and the next `up` reads it.
+start() {
+	echo "IMAGE_TAG=$1" > .env
+	docker compose up -d --no-build --wait --wait-timeout 90 && healthy "$1"
+}
+
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> deploys.log; }
+
+remote() {
+	mode=$1 app=$2 version=$3
+	cd "$root/$app" || die "$root/$app does not exist — runbooks/new-app.md first"
+
+	# One deploy at a time per application.
+	exec 9> deploy.lock
+	flock -n 9 || die "another deploy of $app is running"
+
+	# What runs now, read off the container rather than .env: the container is
+	# the truth, and .env may already name something that never started.
+	running=$(docker compose ps --format '{{.Image}}' app 2>/dev/null | sed -n 's/^[^:]*://p' | head -n 1)
+
+	if [ "$mode" = rollback ]; then
+		docker image inspect "$app:$version" > /dev/null 2>&1 ||
+			die "the server has no image $app:$version — deploy that tag from source instead"
+		if start "$version"; then
+			log "rollback $version (was ${running:-nothing}) ok"
+			echo "deploy: $app runs $version"
+			return
+		fi
+		log "rollback $version (was ${running:-nothing}) FAILED"
+		die "$version did not come up healthy — docker compose logs app"
+	fi
+
+	# Extract beside the tree, then swap: the tree the next build reads is
+	# either the old one or the new one, never half of one or an empty one.
+	tarball=incoming/$app-$version.tgz
+	rm -rf src.new && mkdir src.new
+	tar xzf "$tarball" -C src.new
+	rm -rf src.old compose.yaml.old
+	[ -d src ] && mv src src.old
+	mv src.new src
+	[ -f compose.yaml ] && cp compose.yaml compose.yaml.old
+	cp src/compose.yaml compose.yaml
+
+	# Build while the old container still serves. A failed build puts the old
+	# tree back and changes nothing else: a failed deploy is one that did not
+	# happen. --pull fetches the base images' patches under their minor tags.
+	if ! IMAGE_TAG=$version docker compose build --pull; then
+		rm -rf src && [ -d src.old ] && mv src.old src
+		[ -f compose.yaml.old ] && mv compose.yaml.old compose.yaml
+		log "deploy $version (was ${running:-nothing}) FAILED to build"
+		die "the build failed; ${running:-nothing} still runs"
+	fi
+
+	# A snapshot of the data before the new version migrates it, taken cold:
+	# stopped, so the database and its WAL are one consistent state. It is the
+	# way back from a migration, not a backup — it lives on the same disk.
+	snapshot=""
+	if [ -n "$running" ] && docker volume inspect "${app}_data" > /dev/null 2>&1; then
+		mkdir -p snapshots && chmod 700 snapshots
+		snapshot=snapshots/$app-$running-$(date -u +%Y%m%dT%H%M%SZ).tgz
+		docker compose stop app
+		docker run --rm --pull never -v "${app}_data:/data:ro" -v "$PWD/snapshots:/out" \
+			alpine:3.24 tar czf "/out/${snapshot#snapshots/}" -C /data .
+		ls -1t snapshots/*.tgz | tail -n +$((keep + 1)) | xargs rm -f --
+	fi
+
+	if start "$version"; then
+		rm -f "$tarball"
+		log "deploy $version (was ${running:-nothing}) ok${snapshot:+, snapshot $snapshot}"
+		echo "deploy: $app runs $version"
+		return
+	fi
+
+	# The new version did not come up. Its image stays for a look; the old one
+	# starts again. The data is left as the new version left it — whether to
+	# put the snapshot back is a decision, runbooks/deploy.md.
+	if [ -n "$running" ] && start "$running"; then
+		log "deploy $version (was $running) FAILED, rolled back to $running${snapshot:+, snapshot $snapshot}"
+		die "$version did not come up healthy; $running runs again — docker compose logs app"
+	fi
+	log "deploy $version (was ${running:-nothing}) FAILED, nothing healthy runs${snapshot:+, snapshot $snapshot}"
+	die "$version did not come up healthy and nothing runs — docker compose logs app"
+}
+
+if [ "${1:-}" = --remote ]; then
+	shift
+	remote "$@"
+	exit
+fi
+
+# ------------------------------------------------------------ your machine
+
+case "${1:-}" in
+--rollback)
+	[ $# -eq 2 ] || die "usage: deploy --rollback <version>"
+	mode=rollback version=$2 ;;
+-* | "")
+	die "usage: deploy <version> | deploy --rollback <version>" ;;
+*)
+	[ $# -eq 1 ] || die "usage: deploy <version>"
+	mode=deploy version=$1 ;;
+esac
+
+top=$(git rev-parse --show-toplevel 2> /dev/null) || die "run it from the application's checkout"
+app=$(basename "$top")
+
+if [ "$mode" = deploy ]; then
+	git -C "$top" rev-parse -q --verify "refs/tags/$version" > /dev/null ||
+		die "no tag $version — tag the release first"
+	git -C "$top" show "$version:compose.yaml" | grep -qx "name: $app" ||
+		die "compose.yaml at $version does not say name: $app"
+
+	# A fresh clone of the tag: .git travels, because the toolchain stamps the
+	# version from it, and nothing that was never committed does — no .env, no
+	# database, no local settings. The working tree may be anywhere.
+	tmp=$(mktemp -d)
+	trap 'rm -rf "$tmp"' EXIT
+	git clone -q --no-checkout "file://$top" "$tmp/$app"
+	git -C "$tmp/$app" -c advice.detachedHead=false checkout -q "$version"
+
+	# Streamed over ssh into an application the server already has — the
+	# directory is new-app.md's to make — and renamed once whole, so a stalled
+	# copy leaves a .part behind and never a tarball that looks complete.
+	# macOS: the two flags keep resource forks and extended attributes out of
+	# the archive.
+	COPYFILE_DISABLE=1 tar --no-xattrs -czf - -C "$tmp/$app" . |
+		ssh "$host" "cd '$root/$app' 2> /dev/null && mkdir -p incoming && cat > 'incoming/$app-$version.tgz.part' \
+			&& mv 'incoming/$app-$version.tgz.part' 'incoming/$app-$version.tgz'" ||
+		die "could not send $version — is $root/$app there? runbooks/new-app.md first"
+fi
+
+ssh "$host" "DEPLOY_ROOT='$root' sh -s -- --remote $mode '$app' '$version'" < "$0"
