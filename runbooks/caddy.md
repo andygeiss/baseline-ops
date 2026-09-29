@@ -119,6 +119,34 @@ connection by the time it can refuse the request. The kernel is what refuses
 that one — [vserver.md](../servers/vserver.md), "Limits on what one address may
 open".
 
+## A site for a static page
+
+A page that is one HTML file and nothing else has no Go binary to build, so it
+does not use the template. It runs its own small stack instead: a Caddy
+container on the proxy's pinned image, serving the file on `:8080` under the
+page's alias on `web`. The proxy then treats it like any application, and the
+site file is the ordinary one:
+
+```sh
+ssh andygeiss@vserver "printf 'kimmich.ai-at-home.de {\n\timport site kimmich\n}\n' > /opt/caddy/sites/kimmich.caddy"
+```
+
+The page's repository owns its `compose.yaml` and `Caddyfile`, and its README
+says how they reach `/opt/<app>/`. The first one is the Verteidiger-Guide
+(`~/workspace/defender`, since 2026-09-29). Three things in its `compose.yaml`
+are not obvious:
+
+- **`cap_add: [NET_BIND_SERVICE]`, although `:8080` needs no privilege.** The
+  image's `caddy` binary carries that file capability, and the kernel refuses
+  to exec it when `cap_drop: [ALL]` has removed it from the bounding set. The
+  container restarts in a loop with `exec /usr/bin/caddy: operation not
+  permitted`.
+- **`tmpfs` for `/data` and `/config`, owned by `10001`.** Caddy writes lock
+  files there even with TLS off; a root-owned tmpfs logs `permission denied`.
+- **The CSP allows the page's inline `<style>` by its hash**, never by
+  `'unsafe-inline'`. The deploy writes the hash into `/opt/<app>/.env`, so a
+  changed stylesheet ships with its own.
+
 ## Remove a site
 
 ```sh

@@ -245,6 +245,20 @@ The proxy has a directory of its own, not owned by any application:
 └── compose.yaml      ← from this repository's portainer/; its data is the volume portainer_data
 ```
 
+A static page is an application without a build, so its directory holds the
+file instead of `src/`:
+
+```
+/opt/kimmich/
+├── .env              ← one line: STYLE_HASH=…; written by every deploy
+├── Caddyfile         ← from the repository; overwritten by every deploy
+├── compose.yaml      ← from the repository; overwritten by every deploy
+└── site/index.html   ← the page; overwritten by every deploy
+```
+
+[runbooks/caddy.md](../runbooks/caddy.md), "A site for a static page", says
+why it looks like this.
+
 Its certificates live in the named volume `caddy_caddy_data`, which no deploy
 touches. Where a site's domain is written down is `sites/`, and nowhere else: an
 application repository names no domain, which is what lets one repository serve
