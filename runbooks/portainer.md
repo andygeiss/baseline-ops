@@ -61,13 +61,19 @@ That is the only place it is ever seen.
 
 ## Upgrade
 
-Bump the row in [VERSIONS.md](../VERSIONS.md) — the LTS line, and the version
-behind the `lts` tag, never the tag itself — then:
+Bump the row in [VERSIONS.md](../VERSIONS.md) and the tag in
+`portainer/compose.yaml` — the LTS line, and the version behind the `lts` tag,
+never the tag itself — then:
 
 ```sh
 scp portainer/compose.yaml andygeiss@vserver:/opt/portainer/
 ssh andygeiss@vserver 'cd /opt/portainer && docker compose pull && docker compose up -d && docker compose ps'
+curl -s https://portainer.ai-at-home.de/api/system/status    # {"Version":"2.45.2",…}
 ```
 
-Portainer refuses to start on a downgrade. Read the version it is running
-(`docker compose logs portainer | grep version=`) before pinning a number.
+Portainer refuses to start on a downgrade, so read the version it runs before
+pinning a number. The `curl` above answers that; before DNS, ask the loopback
+port instead with `ssh andygeiss@vserver 'curl -sk
+https://127.0.0.1:9443/api/system/status'`. Do not grep the log for
+`version=`: the line that names Portainer's version also names the Go,
+Node.js, pnpm and webpack versions it was built with.
