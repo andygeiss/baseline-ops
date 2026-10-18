@@ -67,6 +67,15 @@ A device on `SCHNIPOSA` takes the house's own line, and gets the `403`. That
 line's address cannot be let in as well: the line is behind CGNAT, so the
 address is shared with strangers, and it changes.
 
+**Safari with iCloud Private Relay gets the `403` even on `KNOPPERS`.** Private
+Relay sends Safari's requests through Apple's relays, so they arrive from one
+of Apple's addresses, never from the house's. Safari's Web Inspector shows
+`(Proxy)` after the server's address when it does. Turn off "Limit IP address
+tracking" for the `KNOPPERS` Wi-Fi on that device, and Private Relay stays off
+on that network only, or open Portainer in another browser. On `KNOPPERS` the
+tunnel already hides the house's address from every site. Apple's relay
+addresses cannot be let in: everyone who uses Private Relay shares them.
+
 **The A record stays.** The house looks the name up in public DNS like
 everyone else, so without the record no device there finds the server either.
 Let's Encrypt checks the name from the internet too, and the `403` does not
