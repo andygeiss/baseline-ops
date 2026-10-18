@@ -59,9 +59,10 @@ before the machine goes down, and only a new id proves it rebooted.
 
 ```sh
 ssh andygeiss@vserver 'uname -r; systemctl --failed --no-legend'
-ssh andygeiss@vserver 'docker ps --format "{{.Names}}\t{{.Status}}"; ip -4 -br addr show docker0'
+ssh andygeiss@vserver 'docker ps --format "{{.Names}}\t{{.Status}}"; ip -4 -br addr show docker0; ss -lntH "( sport = :18000 )"'
 ssh root@vserver 'journalctl -b -p err -q --no-pager | grep -v " networkctl\[" | tail -5'
 ssh root@vserver 'iptables -S DOCKER-USER; ip6tables -S DOCKER-USER; modinfo -F filename xt_connlimit xt_hashlimit'
+ssh root@vserver 'wg show wg0 | grep "latest handshake"; iptables -t nat -S POSTROUTING | grep 10.77; iptables -t mangle -S FORWARD | grep -c wg0'
 for d in $(ssh andygeiss@vserver 'head -qn1 /opt/caddy/sites/*.caddy' | cut -d' ' -f1); do
     printf '%-28s %s\n' "$d" "$(curl -so /dev/null -w '%{http_code}' "https://$d/")"
 done
@@ -80,9 +81,15 @@ done
 - `docker0` is `172.17.0.1/16`, the address a house tunnel binds —
   [vserver.md](../servers/vserver.md), "Tunnels from the house". It says
   `DOWN`, and that is normal: no container uses the default bridge, so the
-  link has no carrier, and the address binds all the same.
+  link has no carrier, and the address binds all the same. The oMLX tunnel
+  holds `172.17.0.1:18000` again. It comes last, a few minutes after the rest:
+  the house has to reconnect wg0 before the Studio's `ssh -R` can come back.
 - `DOCKER-USER` exists for both address families, and both connection-limit
   modules resolve on the new kernel — [vserver.md](../servers/vserver.md),
   "Limits on what one address may open".
+- The house shook hands on wg0 within the last 3 minutes, and `wg-exit.service`
+  put its rules back after Docker: three in `DOCKER-USER`, the `MASQUERADE` for
+  `10.77.0.0/24`, and the two MSS rules, so the count says `2` —
+  [vserver.md](../servers/vserver.md), "The house's way out".
 - Every site answers `200`, except a tunnelled one: its root is `404`, from the
   proxy, by design ([caddy.md](caddy.md), "A site for a tunnelled service").

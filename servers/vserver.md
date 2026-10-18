@@ -56,11 +56,42 @@ of it. `172.17.0.1` is reachable by every container on this host and by nothing
 outside it. Ports below 10000 are taken or reserved; a tunnel uses 18000 and
 up.
 
-**The house machine sleeps.** The Mac that runs oMLX is a laptop, and it is
-offline at night, so `omlx.ai-at-home.de` answers `502` until it wakes. That is
-the ordinary state, not a fault — the launchd agent reopens the tunnel by itself
-when the machine comes back. A `502` in the middle of the working day is worth
-chasing; a `502` at 03:00 is the laptop.
+**The house machine's key may do one thing: bind that port.** oMLX runs on the
+Mac Studio, and the tunnel's key there, `~/.ssh/omlx-tunnel`, has no
+passphrase, because launchd uses it with nobody at the keyboard. So its line in
+`~andygeiss/.ssh/authorized_keys` takes everything else away:
+
+```
+from="10.77.0.2",restrict,port-forwarding,permitlisten="172.17.0.1:18000",permitopen="127.0.0.1:9",command="/usr/bin/false" ssh-ed25519 … omlx-tunnel@AndysMacStudio
+```
+
+- `restrict` takes everything away, and `port-forwarding` gives forwarding
+  back. `permitlisten` narrows `-R` to the one port, and `permitopen` sends
+  `-L` to port 9, where nothing listens.
+- `command` runs `false` in place of anything the key asks to run.
+- `from` takes the key only from `10.77.0.2`, the house's end of wg0. The
+  Studio reaches this server through "The house's way out" and no other way,
+  so a copy of the key is no use outside the house.
+
+One way round it is left. `AllowStreamLocalForwarding` is on, so the key can
+still forward a Unix socket, and `/var/run/docker.sock` is root. That holds for
+every key of `andygeiss`. `AllowStreamLocalForwarding no` in `10-tunnel.conf`
+closes it, and takes an sshd reload.
+
+The Studio finds this server through its own `~/.ssh/config`, not
+`/etc/hosts`: `Host vserver` there names the address and the key. When the
+address changes, that line changes too.
+
+**The house machine stays on.** The Mac Studio does not sleep (`pmset -g` says
+`sleep 0`), so a `502` from `omlx.ai-at-home.de` is worth chasing at any hour.
+A minute at 04:00 can be this server rebooting. Otherwise one of two things is
+down:
+
+- **The house's way out.** The tunnel rides wg0 and goes down with it. The
+  launchd agent reopens it once wg0 is back.
+- **The Studio itself.** After a power cut it stays off, because `autorestart`
+  is off. After a restart it waits at the login window: oMLX is an app and the
+  tunnel a launchd agent, and both start only when someone logs in.
 
 ### Publishing one through the proxy
 
@@ -84,7 +115,7 @@ Let's Encrypt for the certificate the moment it reads the site, every
 certificate issued is written to a public log, and scanners read those logs.
 
 **The tunnel belongs to the service, never to one of its callers.**
-`com.andygeiss.omlx-tunnel` — a launchd agent on the house Mac, written by
+`com.andygeiss.omlx-tunnel` — a launchd agent on the Mac Studio, written by
 `make omlx-tunnel` in this repository — is what opens it. It was
 kai-orchestrator's until 2026-09-07. That application and `omlx.ai-at-home.de`
 were both riding it by then, so removing the one would have taken the other
@@ -239,14 +270,15 @@ iptables -I DOCKER-USER -s 203.0.113.9 -j DROP    # -D in place of -I lets it ba
 ## The house's way out
 
 A device on the house's `KNOPPERS` WLAN reaches the internet through this
-server, so every site it talks to sees this server's address instead of the
-house's. The house's gateway, a UniFi, opens a WireGuard tunnel to UDP 51820
-and routes that one network into it. This server lets the traffic out by
-`eth0`, under its own address.
+server, and so does the Mac Studio, so every site they talk to sees this
+server's address instead of the house's. The house's gateway, a UniFi, opens a
+WireGuard tunnel to UDP 51820 and routes that network and the Studio into it.
+This server lets the traffic out by `eth0`, under its own address.
 
 ```
-device on KNOPPERS ─► UniFi ══ WireGuard ══► wg0 ─► eth0 ─► the internet
-                      10.77.0.2              10.77.0.1      under this server's address
+device on KNOPPERS ─┐
+                    ├─► UniFi ══ WireGuard ══► wg0 ─► eth0 ─► the internet
+Mac Studio ─────────┘   10.77.0.2              10.77.0.1      under this server's address
 ```
 
 `make wg-exit` in this repository sets up this side, once. `make wg-house`
@@ -307,21 +339,25 @@ of its settings decide whether anything goes round the tunnel:
 
 - **`KNOPPERS` is a network of its own**, a VLAN with its own WLAN. A UniFi
   route picks a network or a device, never a WLAN's name.
-- **A route sends `KNOPPERS` into the VPN client, with its kill switch on.**
-  Without the kill switch, the network falls back to the house's line whenever
-  the tunnel is down. One forum report says the switch did not hold with
-  WireGuard, so test it after any change to the route: pause the VPN client,
-  and a device on `KNOPPERS` must go offline.
+- **A route sends `KNOPPERS` and the Mac Studio into the VPN client, with its
+  kill switch on.** The Studio is on the house's main LAN, by cable. The route
+  names it as a device, and it keeps its address there. Without the kill
+  switch, both fall back to the house's line whenever the tunnel is down. One
+  forum report says the switch did not hold with WireGuard, so test it after
+  any change to the route: pause the VPN client, and a device on `KNOPPERS`
+  must go offline.
 - **DHCP on `KNOPPERS` hands out `9.9.9.9` as DNS.** With the gateway as its
   resolver, DNS would take the house's line, and the provider would see every
-  name.
-- **`KNOPPERS` has no IPv6.** The tunnel carries IPv4 only, so IPv6 would go
-  round it.
+  name. The Studio is not on `KNOPPERS` and still asks the gateway, so its
+  lookups take the house's line.
+- **`KNOPPERS` has no IPv6, and neither has the main LAN.** The tunnel carries
+  IPv4 only, so IPv6 would go round it.
 
 ### What it costs
 
-- **`KNOPPERS` is no faster than this server**, and every connection makes the
-  detour through netcup.
+- **`KNOPPERS` and the Studio are no faster than this server**, and every
+  connection makes the detour through netcup, a model download on the Studio
+  included.
 - **Sites see a data centre's address.** Streaming services and some banks block
   one, or ask more often. That is why `KNOPPERS` is a second WLAN, not the
   house's only one.
@@ -331,10 +367,11 @@ of its settings decide whether anything goes round the tunnel:
   stands between the internet and root ("What is installed").
 - **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
   offline for the same minute as the sites.
-- **ssh from `KNOPPERS` rides the tunnel too.** sshd sees `10.77.0.2`, and a
-  session that was open when a machine joined `KNOPPERS` hangs, because its
-  address changed under it. When the tunnel is down, the kill switch keeps ssh
-  out as well: mend the tunnel from the house's other WLAN.
+- **ssh from `KNOPPERS` and from the Studio rides the tunnel too.** sshd sees
+  `10.77.0.2`, and a session that was open when a machine joined `KNOPPERS`
+  hangs, because its address changed under it. When the tunnel is down, the
+  kill switch keeps ssh out as well, and the oMLX tunnel with it: mend the
+  tunnel from the house's other WLAN.
 
 ## The `web` network
 
