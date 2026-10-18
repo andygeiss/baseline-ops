@@ -85,6 +85,7 @@ baseline-ops/
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
 │   ├── deploy.md               ← ship a tagged release; roll one back
+│   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time
 │   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
