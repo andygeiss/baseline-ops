@@ -256,7 +256,7 @@ whoever holds that file can send anything through this server, under this
 server's address.
 
 ```sh
-ssh root@vserver 'wg show wg0'    # "latest handshake" seconds ago: the house is connected
+ssh root@vserver 'wg show wg0'    # "latest handshake" under 3 minutes ago: the house is connected
 ```
 
 **No device in the house is reachable from here**, and "Tunnels from the
@@ -331,6 +331,10 @@ of its settings decide whether anything goes round the tunnel:
   stands between the internet and root ("What is installed").
 - **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
   offline for the same minute as the sites.
+- **ssh from `KNOPPERS` rides the tunnel too.** sshd sees `10.77.0.2`, and a
+  session that was open when a machine joined `KNOPPERS` hangs, because its
+  address changed under it. When the tunnel is down, the kill switch keeps ssh
+  out as well: mend the tunnel from the house's other WLAN.
 
 ## The `web` network
 
