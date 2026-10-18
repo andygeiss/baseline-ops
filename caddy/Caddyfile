@@ -35,6 +35,9 @@
 #
 # There is deliberately no `write` timeout. Caddy measures it over the whole
 # response, so any value short enough to help would cut a model off mid-answer.
+# write_idle is another timer, and since 2.11.6 Caddy sets it to a minute by
+# default. It counts only a write that makes no progress, such as one to a
+# client that stopped reading. A model's pauses between tokens do not count.
 {
 	servers {
 		timeouts {

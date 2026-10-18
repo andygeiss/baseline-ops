@@ -11,7 +11,7 @@ code rather than the server.
 | Component | Pinned version | Released | Notes |
 |---|---|---|---|
 | `alpine` base image | **3.24** | 2026-06-16 | Runtime stage of every application image. Minor tag: patches arrive, surprises do not. |
-| Caddy image | **2.11-alpine** | 2.11.4, 2026-06-03 | TLS termination, automatic certificates and renewal, compression, HTTP/3. One instance, `/opt/caddy`, in front of every application; a bump is [runbooks/caddy.md](runbooks/caddy.md) "Upgrade", not one deploy per app. |
+| Caddy image | **2.11.7-alpine** | 2026-10-03 | TLS termination, automatic certificates and renewal, compression, HTTP/3. One instance, `/opt/caddy`, in front of every application; a bump is [runbooks/caddy.md](runbooks/caddy.md) "Upgrade", not one deploy per app. Never 2.11.6: it cut streamed answers off after a minute. |
 | Docker Compose | **v5.6.0** | 2026-10-02 | The `docker compose` plugin, not the retired `docker-compose` script. Ships with the Engine install, so upgrading that package is what moves this row. |
 | Docker Engine | **29.9.1** | 2026-10-14 | On the server only — it builds and runs everything. Install from Docker's own repository, never the distribution package. |
 | `golang` base image | **1.27-alpine** | 2026-09-02 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
@@ -20,9 +20,21 @@ code rather than the server.
 
 ## Version policy
 
-- **Third-party images are pinned to their minor tag** (`caddy:2.11-alpine`,
-  `alpine:3.24`), so security patches arrive without a new major landing
-  unannounced. Re-verify quarterly, and after any published container CVE.
+- **A base image is pinned to its minor tag** (`alpine:3.24`,
+  `golang:1.27-alpine`). Every deploy builds with `--pull`, so its security
+  patches arrive with the next deploy, and a new major never lands
+  unannounced.
+- **The server's own stacks are pinned to the exact version**
+  (`caddy:2.11.7-alpine`, and Portainer's). Nothing pulls them except their
+  runbook's "Upgrade", so a minor tag buys no patches there. It only lets a
+  `docker compose pull` take a release nobody read, and Caddy 2.11.6 put
+  breaking changes into a patch release. On the exact tag, every move is an
+  edit someone reads.
+- **Litestream's `0.5` is the one case left open.** Nothing pulls a sidecar on
+  its own either, but its tag lives in each application's `compose.yaml`, so
+  an exact tag costs an edit in every one of them per release. No application
+  runs it yet, and the first one to add it settles which tag it uses.
+- **Re-verify quarterly**, and after any published container CVE.
 - **An application's own image is tagged with the exact version `git describe`
   produces.** `:latest` MUST NOT appear anywhere: a tag that moves makes "what is
   running?" unanswerable and rollback impossible.

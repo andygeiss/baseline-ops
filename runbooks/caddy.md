@@ -111,7 +111,10 @@ curl -so /dev/null -w '%{http_code}\n' https://omlx.ai-at-home.de/admin/      # 
 Streaming survives `encode`: a token reaches the caller as the model produces
 it, compressed or not, so no site needs `flush_interval`. It survives the
 timeouts in `Caddyfile` too, and only because none of them is a `write` timeout.
-Read the comment there before adding one.
+Read the comment there before adding one. Since 2.11.6, Caddy also sets
+`write_idle` to a minute on its own. That one is safe: it ends only a write
+that makes no progress, and a model's pauses between tokens do not count.
+2.11.6 itself still cut some streams off after a minute; 2.11.7 fixed that.
 
 A flood that carries a token, or one aimed at the TLS handshake rather than at
 the service, never reaches any of this: Caddy has already paid for the

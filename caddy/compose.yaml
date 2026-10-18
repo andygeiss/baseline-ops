@@ -9,7 +9,7 @@ name: caddy
 
 services:
   caddy:
-    image: caddy:2.11-alpine
+    image: caddy:2.11.7-alpine  # exact, not 2.11-alpine: VERSIONS.md says why
     restart: unless-stopped
     ports:                      # the only public listener on the box
       - "80:80"                 # ACME challenge + the redirect to HTTPS
