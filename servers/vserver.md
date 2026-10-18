@@ -108,6 +108,36 @@ port, `127.0.0.1:9443`, for the SSH-tunnel path
 which is root — so its login is the only thing between the internet and root
 on this host. The password is long, and the socket itself is never published.
 
+## Updates and the nightly reboot
+
+**Not switched on yet, as of 2026-10-18.** `make auto-reboot` in this
+repository is what changes that. Until then, the server reboots only when a
+person reboots it.
+
+unattended-upgrades installs Ubuntu's security updates every morning, at a
+random minute between 06:00 and 07:00 server time (Europe/Berlin). Most of
+them work at once. A kernel or libc fix does not: it waits for a reboot, and
+`/run/reboot-required` says one is waiting. `make auto-reboot` writes two
+settings to `/etc/apt/apt.conf.d/52auto-reboot`, so the morning run that finds
+one waiting reboots the server at the next 04:00:
+
+```
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+```
+
+04:00 is after the hour that daylight saving time skips or repeats, and an
+hour nobody uses the sites. On a night a reboot waits, every site is gone for
+a minute, and nothing announces it. Every container comes back by itself,
+because each one says `restart: unless-stopped`, and the house machine's
+launchd agent reopens its tunnel. The reboot on 2026-10-18 showed all of it:
+ssh answered 33 seconds after the command, and every container, `docker0`, and
+the tunnel were back without help.
+
+Without it, the server ran kernel 7.0.0-30 for 52 days while -31, -34 and -38
+were installed and waited. [runbooks/host.md](../runbooks/host.md) is the same
+job by hand: in a version pass, or for a fix that should not wait for 04:00.
+
 ## Ports
 
 | Port | Who | Public |

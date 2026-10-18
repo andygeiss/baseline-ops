@@ -1,9 +1,9 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and three
-# targets set up a machine rather than build anything: `sshd-tunnel` and
-# `conn-limits` on the server, `omlx-tunnel` on the house machine — each a line
-# that must be typed exactly, so it is not typed. `install` is the first
-# target: a bare `make` installs.
+# wire it into the current user's Claude Code as a personal skill, and four
+# targets set up a machine rather than build anything: `sshd-tunnel`,
+# `conn-limits` and `auto-reboot` on the server, `omlx-tunnel` on the house
+# machine — each a line that must be typed exactly, so it is not typed.
+# `install` is the first target: a bare `make` installs.
 
 SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 
@@ -12,7 +12,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
+.PHONY: auto-reboot conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -51,6 +51,16 @@ conn-limits:
 	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/conn-limits && sh -n /usr/local/sbin/conn-limits'
 	ssh $(ROOT) 'printf "%s\n" "[Unit]" "Description=Per-address connection limits on :443" "After=docker.service" "Requires=docker.service" "" "[Service]" "Type=oneshot" "RemainAfterExit=yes" "ExecStart=/usr/local/sbin/conn-limits" "" "[Install]" "WantedBy=multi-user.target" > /etc/systemd/system/conn-limits.service'
 	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now conn-limits && iptables -S DOCKER-USER && ip6tables -S DOCKER-USER'
+
+# Lets unattended-upgrades reboot the server when an update it installed needs
+# one (servers/vserver.md, "Updates and the nightly reboot"). It installs kernel
+# and libc fixes every morning, and without this the server never boots into
+# them. The reboot waits for 04:00, when nobody uses the sites. A file of its
+# own rather than an edit to 50unattended-upgrades, which the package owns.
+# Runs twice safely: the drop-in is rewritten, and the last line prints the
+# settings apt actually reads.
+auto-reboot:
+	ssh $(ROOT) 'printf "Unattended-Upgrade::Automatic-Reboot \"true\";\nUnattended-Upgrade::Automatic-Reboot-Time \"04:00\";\n" > /etc/apt/apt.conf.d/52auto-reboot && apt-config dump | grep -E "^Unattended-Upgrade::Automatic-Reboot"'
 
 # The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
 # open, so the proxy — and any container on the server — reaches the model host
