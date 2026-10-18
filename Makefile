@@ -72,7 +72,8 @@ auto-reboot:
 # files are rewritten, the script adds only a rule that is missing, and the last
 # line prints the tunnel and the rules the kernel actually has. servers/wg-exit
 # and servers/wg-house hold the same numbers — 10.77.0.0/24, MTU 1380, port
-# 51820 — and change with them.
+# 51820 — and change with them. So does caddy/Caddyfile: its house-only
+# snippet lets in the house's end of the tunnel, 10.77.0.2, and nothing else.
 wg-exit:
 	scp servers/wg-exit $(ROOT):/usr/local/sbin/wg-exit
 	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/wg-exit && sh -n /usr/local/sbin/wg-exit'

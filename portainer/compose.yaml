@@ -1,13 +1,16 @@
-# The optional look at what is running — servers/vserver.md, "Portainer". It
-# lives at /opt/portainer/ on the server; runbooks/portainer.md puts it there.
+# The optional look at what is running — servers/vserver.md, "What is
+# installed". It lives at /opt/portainer/ on the server; runbooks/portainer.md
+# puts it there.
 #
 # It mounts the Docker socket, which is root on this host. Its login is the
-# only thing between the internet and that socket, so the password is a long
-# one, and nothing here is copied to any other server without that thought.
+# only thing between whoever reaches it and that socket. So the proxy lets only
+# the house reach it, the password is a long one, and nothing here is copied to
+# any other server without that thought.
 #
 # No public port: the proxy reaches it by name on the web network and serves
 # it under its own domain with a real certificate. The one published port is
-# on loopback, for the ssh -L path that works before DNS does.
+# on loopback, for the ssh -L path: the way in from outside the house, and
+# before DNS.
 
 name: portainer
 

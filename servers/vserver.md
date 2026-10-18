@@ -135,12 +135,16 @@ owning it.
 
 Portainer is installed, for a look at what is running — its own stack in
 `/opt/portainer`, from this repository's `portainer/`
-([runbooks/portainer.md](../runbooks/portainer.md)). It sits behind the proxy
-at `https://portainer.ai-at-home.de` like every application, and publishes one
-port, `127.0.0.1:9443`, for the SSH-tunnel path
-(`ssh -L 9443:127.0.0.1:9443 andygeiss@vserver`). It mounts the Docker socket,
-which is root — so its login is the only thing between the internet and root
-on this host. The password is long, and the socket itself is never published.
+([runbooks/portainer.md](../runbooks/portainer.md)). It mounts the Docker
+socket, which is root, so whoever logs in to it is root on this host. That is
+why only the house gets through to its login. It sits behind the proxy at
+`https://portainer.ai-at-home.de`, and the proxy answers `403` to every
+request that does not come from `10.77.0.2`, the house's end of wg0. A request
+from `KNOPPERS` or the Mac Studio to this server rides wg0 like any other
+("The house's way out"), so it comes from that address. Portainer also
+publishes one port, `127.0.0.1:9443`, for the SSH-tunnel path
+(`ssh -L 9443:127.0.0.1:9443 andygeiss@vserver`), the way in from anywhere
+else. The password is long, and the socket itself is never published.
 
 ## Updates and the nightly reboot
 
@@ -363,8 +367,9 @@ of its settings decide whether anything goes round the tunnel:
   house's only one.
 - **The sites' address is the house's now, too.** An abuse report about
   something done on `KNOPPERS` reaches netcup, and then you.
-- **Root here sees where the house connects.** The Portainer login is all that
-  stands between the internet and root ("What is installed").
+- **Root here sees where the house connects.** Whoever takes this server sees
+  it too. Portainer's login would hand root over, so it answers only the house
+  ("What is installed").
 - **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
   offline for the same minute as the sites.
 - **ssh from `KNOPPERS` and from the Studio rides the tunnel too.** sshd sees

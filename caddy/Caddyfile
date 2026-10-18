@@ -20,12 +20,12 @@
 #     	import tunnel 18000
 #     }
 #
-# A service that is not built on the template answers on its own port, so its
-# site file writes the two lines itself instead of importing a snippet:
+# A site only the house may open imports `house-only`, and names its upstream,
+# host and port. Portainer is the one such site, and it is not built on the
+# template, so it answers on a port of its own:
 #
 #     portainer.example.com {
-#     	encode zstd gzip
-#     	reverse_proxy portainer:9000
+#     	import house-only portainer:9000
 #     }
 
 # What a flood costs before Caddy can refuse it. read_header hangs up on a
@@ -106,6 +106,31 @@
 	handle {
 		respond 404
 	}
+}
+
+# A site only the house may open, such as Portainer, whose login is root on
+# this host. A request from the house rides wg0 and arrives from the house's
+# end of it, 10.77.0.2 — servers/vserver.md, "The house's way out". That is
+# the address servers/wg-house gives the gateway, and the two change together.
+# {args[0]} is the upstream, host and port.
+(house-only) {
+	# remote_ip reads the address of the connection itself, never a header, so
+	# no client can claim to be the house. A packet from the internet that
+	# carries the house's address gets nowhere either: the answer goes into
+	# wg0, to the house, so the handshake never completes.
+	@outside not remote_ip 10.77.0.2
+
+	# Caddy runs `respond` before `reverse_proxy` by its own directive order,
+	# so the internet never reaches the upstream. `close` hangs up after the
+	# 403, as the tunnel's 401 does. Let's Encrypt checks the name on :80 and
+	# in the TLS handshake, before any of this runs, so the certificate still
+	# renews.
+	respond @outside 403 {
+		close
+	}
+
+	encode zstd gzip
+	reverse_proxy {args[0]}
 }
 
 import /etc/caddy/sites/*.caddy
