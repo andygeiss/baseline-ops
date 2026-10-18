@@ -128,13 +128,14 @@ page's alias on `web`. The proxy then treats it like any application, and the
 site file is the ordinary one:
 
 ```sh
-ssh andygeiss@vserver "printf 'kimmich.ai-at-home.de {\n\timport site kimmich\n}\n' > /opt/caddy/sites/kimmich.caddy"
+ssh andygeiss@vserver "printf 'guide.example.com {\n\timport site guide\n}\n' > /opt/caddy/sites/guide.caddy"
 ```
 
 The page's repository owns its `compose.yaml` and `Caddyfile`, and its README
-says how they reach `/opt/<app>/`. The first one is the Verteidiger-Guide
-(`~/workspace/defender`, since 2026-09-29). Three things in its `compose.yaml`
-are not obvious:
+says how they reach `/opt/<app>/`. The first was the Verteidiger-Guide
+(`andygeiss/defender`), served at `kimmich.ai-at-home.de` from 2026-09-29 to
+2026-10-18. No page runs here now. The next one starts from that repository's
+`compose.yaml`, and three things in it are not obvious:
 
 - **`cap_add: [NET_BIND_SERVICE]`, although `:8080` needs no privilege.** The
   image's `caddy` binary carries that file capability, and the kernel refuses

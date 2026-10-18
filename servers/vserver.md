@@ -246,10 +246,11 @@ The proxy has a directory of its own, not owned by any application:
 ```
 
 A static page is an application without a build, so its directory holds the
-file instead of `src/`:
+file instead of `src/`. None has run here since kimmich came off on
+2026-10-18; the next one looks like this:
 
 ```
-/opt/kimmich/
+/opt/<page>/
 ├── .env              ← one line: STYLE_HASH=…; written by every deploy
 ├── Caddyfile         ← from the repository; overwritten by every deploy
 ├── compose.yaml      ← from the repository; overwritten by every deploy
@@ -288,15 +289,16 @@ Two things grow without asking: images and logs.
 
   **Both applications moved on 2026-09-13**, by
   [runbooks/deploy.md](../runbooks/deploy.md), "Moving off the shared `app:`
-  name". `game` runs `game:v0.2.7` and holds `game:v0.1.0` to `game:v0.2.7`;
-  `lysk` runs `lysk:v0.13.0` and holds `lysk:v0.3.0` to `lysk:v0.13.0`. Each
-  was re-tagged by the project label Compose wrote on the image, except
-  `game:v0.1.1`, whose image carries none — it was rebuilt by hand from the
-  game's tag during a recovery on 2026-09-11 — and was tagged by hand. The old
-  `app:` names still point at the same images, so they cost no disk. A tag
+  name", and `game` is the one still here: it holds its images from
+  `game:v0.1.0` on. The ones from before the move were re-tagged by the
+  project label Compose wrote on them, except `game:v0.1.1`, whose image
+  carries none — it was rebuilt by hand from the game's tag during a recovery
+  on 2026-09-11 — and was tagged by hand. Their old names, `app:v0.1.0` to
+  `app:v0.2.7`, still point at the same images, so they cost no disk. A tag
   from before the move still ships a `compose.yaml` that names `app:`, which
   is the one way back onto the shared name: redeploying such a tag from
-  source builds under it again.
+  source builds under it again. `lysk` came off the server on 2026-10-18, and
+  its images and `app:` names went with it.
 - **Logs.** Docker's default `json-file` driver rotates nothing, which is why
   every service in the template sets `max-size` and `max-file`. A service
   without that block will fill this disk eventually.
