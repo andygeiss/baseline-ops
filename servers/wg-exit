@@ -1,0 +1,38 @@
+#!/bin/sh
+# The house's way out: what lets the traffic of the house's tunnel, wg0, leave
+# by eth0 under this server's address. `make wg-exit` in this repository ships
+# this file and the systemd unit that runs it; servers/vserver.md, "The house's
+# way out", says why each rule is the shape it is.
+#
+# Safe to run twice: -C asks whether a rule is already there, and only a missing
+# one is inserted. No rule depends on where another one sits, so the order they
+# end up in does not matter — among themselves, or against conn-limits.
+set -eu
+
+iptables -S DOCKER-USER >/dev/null 2>&1 || {
+	echo "wg-exit: no DOCKER-USER chain — this Engine is not on the iptables backend, see servers/vserver.md" >&2
+	exit 1
+}
+
+add() { t=$1; c=$2; shift 2; iptables -t "$t" -C "$c" "$@" 2>/dev/null || iptables -t "$t" -I "$c" "$@"; }
+
+# Docker set FORWARD's policy to DROP, so whatever no rule accepts dies here.
+# Out by eth0 goes everything the house sends; back into the tunnel goes only
+# what answers it.
+add filter DOCKER-USER -i wg0 -o eth0 -j ACCEPT
+add filter DOCKER-USER -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# Nothing else enters the tunnel. Docker lets every container open a connection
+# to anywhere, and without this rule anywhere includes the house's gateway.
+add filter DOCKER-USER -o wg0 -m conntrack ! --ctstate RELATED,ESTABLISHED -j DROP
+
+# The house's packets leave with this server's address, so the answers come
+# back here, and every site sees this server rather than the house.
+add nat POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
+
+# wg0's MTU is 1380, so a TCP segment must fit in 1340 bytes, and TCP learns
+# that only from the MSS in a SYN. A SYN from the house is given 1340, and a
+# SYN-ACK going into the tunnel is clamped to wg0's MTU. Without the two, a page
+# whose packets are full-sized hangs half loaded.
+add mangle FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1340
+add mangle FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu

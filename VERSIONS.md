@@ -17,6 +17,7 @@ code rather than the server.
 | `golang` base image | **1.27-alpine** | 1.27.2, 2026-10-08 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
 | Litestream image | **0.5** | 0.5.17, 2026-08-31 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
 | Portainer CE | **2.45.2** | 2026-10-08 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. The next LTS, 3.3, is planned for December 2026: a new major. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
+| wireguard-tools | **1.0.20250521** | 2025-05-21 | On the server only: the `wg` command, for the house's tunnel — [servers/vserver.md](servers/vserver.md), "The house's way out". Ubuntu 26.04's own package, `-1ubuntu1`, so unattended-upgrades moves it, not an edit here. |
 
 ## Version policy
 
@@ -43,8 +44,8 @@ code rather than the server.
   build under one name: the second build to tag a version replaces the first's
   image, and a rollback then starts the wrong application.
 - **Docker Engine follows the current stable release.** It is the one piece of
-  software installed on the host, so it is also the one that must never be a
-  surprise: read the release notes before bumping a major.
+  software on the host from outside Ubuntu's archive, so it is also the one that
+  must never be a surprise: read the release notes before bumping a major.
 - **A version bump is a deploy.** Editing a template here changes nothing until
   each application is redeployed — [runbooks/deploy.md](runbooks/deploy.md).
   Editing `caddy/` changes nothing until the proxy is —
@@ -65,3 +66,5 @@ code rather than the server.
   `sts` tags name the two lines; read the version behind `lts`, do not deploy the
   moving tag. Which line is which, and until when:
   https://docs.portainer.io/start/lifecycle (checked 2026-10-18)
+- wireguard-tools: `apt-cache policy wireguard-tools` on vserver, which names
+  what Ubuntu's archive offers

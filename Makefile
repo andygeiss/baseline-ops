@@ -1,9 +1,9 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and four
+# wire it into the current user's Claude Code as a personal skill, and six
 # targets set up a machine rather than build anything: `sshd-tunnel`,
-# `conn-limits` and `auto-reboot` on the server, `omlx-tunnel` on the house
-# machine — each a line that must be typed exactly, so it is not typed.
-# `install` is the first target: a bare `make` installs.
+# `conn-limits`, `auto-reboot`, `wg-exit` and `wg-house` on the server,
+# `omlx-tunnel` on the house machine — each a line that must be typed exactly,
+# so it is not typed. `install` is the first target: a bare `make` installs.
 
 SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 
@@ -12,7 +12,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: auto-reboot conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall
+.PHONY: auto-reboot conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall wg-exit wg-house
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -61,6 +61,45 @@ conn-limits:
 # settings apt actually reads.
 auto-reboot:
 	ssh $(ROOT) 'printf "Unattended-Upgrade::Automatic-Reboot \"true\";\nUnattended-Upgrade::Automatic-Reboot-Time \"04:00\";\n" > /etc/apt/apt.conf.d/52auto-reboot && apt-config dump | grep -E "^Unattended-Upgrade::Automatic-Reboot"'
+
+# The house's way out: a WireGuard tunnel, wg0, that the house's gateway opens,
+# and the rules that let its traffic leave by eth0 under this server's address
+# (servers/vserver.md, "The house's way out"). systemd-networkd brings wg0 up,
+# as it does eth0, so the tunnel runs no service of its own; wireguard-tools
+# brings only the `wg` command, for keys and for looking. The server's key is
+# made on the server and never leaves it. wg0 starts with no peer — `make
+# wg-house` adds the gateway. Runs twice safely: a key that exists is kept, the
+# files are rewritten, the script adds only a rule that is missing, and the last
+# line prints the tunnel and the rules the kernel actually has. servers/wg-exit
+# and servers/wg-house hold the same numbers — 10.77.0.0/24, MTU 1380, port
+# 51820 — and change with them.
+wg-exit:
+	scp servers/wg-exit $(ROOT):/usr/local/sbin/wg-exit
+	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/wg-exit && sh -n /usr/local/sbin/wg-exit'
+	ssh $(ROOT) 'NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=300 wireguard-tools'
+	ssh $(ROOT) 'cd /etc/systemd/network && { test -s wg0.key || (umask 077 && wg genkey > wg0.key); } && chgrp systemd-network wg0.key && chmod 0640 wg0.key'
+	ssh $(ROOT) 'printf "%s\n" "[NetDev]" "Name=wg0" "Kind=wireguard" "MTUBytes=1380" "" "[WireGuard]" "ListenPort=51820" "PrivateKeyFile=/etc/systemd/network/wg0.key" > /etc/systemd/network/50-wg0.netdev'
+	ssh $(ROOT) 'printf "%s\n" "[Match]" "Name=wg0" "" "[Network]" "Address=10.77.0.1/24" "" "[Link]" "RequiredForOnline=no" > /etc/systemd/network/50-wg0.network'
+	ssh $(ROOT) 'printf "net.ipv4.ip_forward = 1\n" > /etc/sysctl.d/60-wg-exit.conf && sysctl -p /etc/sysctl.d/60-wg-exit.conf'
+	ssh $(ROOT) 'printf "%s\n" "[Unit]" "Description=Forwarding and NAT for the house tunnel, wg0" "After=docker.service" "Requires=docker.service" "" "[Service]" "Type=oneshot" "RemainAfterExit=yes" "ExecStart=/usr/local/sbin/wg-exit" "" "[Install]" "WantedBy=multi-user.target" > /etc/systemd/system/wg-exit.service'
+	ssh $(ROOT) 'networkctl reload && systemctl daemon-reload && systemctl enable --now wg-exit && wg show wg0 && iptables -S DOCKER-USER && iptables -t nat -S POSTROUTING && iptables -t mangle -S FORWARD'
+
+# Gives the house's gateway a new key, and saves the WireGuard file its VPN
+# client reads to $(WG_HOUSE_CONF), mode 0600 (servers/vserver.md, "The house's
+# way out"). The script runs on the server from stdin, so it never lands there,
+# and the gateway's private key goes into that file and nowhere else. Upload the
+# file to the gateway, then delete it: whoever holds it can send anything
+# through the server, under the server's address. Every run makes a new key and
+# retires the old one — a second run is how the key is changed, and the house
+# is offline until its gateway has the new file.
+WG_HOUSE_CONF = $(HOME)/Downloads/vserver-wireguard.conf
+
+wg-house:
+	sh -n servers/wg-house
+	rm -f '$(WG_HOUSE_CONF)'
+	umask 077 && ssh $(ROOT) sh -s < servers/wg-house > '$(WG_HOUSE_CONF)'
+	ssh $(ROOT) 'wg show wg0'
+	ls -l '$(WG_HOUSE_CONF)'
 
 # The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
 # open, so the proxy — and any container on the server — reaches the model host

@@ -49,10 +49,12 @@ make uninstall  # removes the symlink
 make sshd-tunnel    # once per server: let a house machine's ssh -R bind docker0
 make conn-limits    # once per server: cap what one address may open on :443
 make auto-reboot    # once per server: reboot at 04:00 when an update needs it
+make wg-exit        # once per server: let the house's WireGuard tunnel out to the internet
+make wg-house       # once, and again to change the key: the house gateway's WireGuard file
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
 ```
 
-Four targets, and none of them an application's. Two are the two sides of one
+Six targets, and none of them an application's. Two are the two sides of one
 tunnel — the server's sshd drop-in and the Mac's launchd agent (`make
 omlx-tunnel-stop` takes that one away again); [servers/vserver.md](servers/vserver.md),
 "Tunnels from the house", says why a house machine carries a service in over
@@ -60,7 +62,10 @@ SSH, and who owns the command. The third caps what a single address may open on
 the public port, in the one chain a published Docker port cannot walk around —
 same document, "Limits on what one address may open". The fourth lets the
 server boot into the kernel and libc fixes it installs by itself — same
-document, "Updates and the nightly reboot".
+document, "Updates and the nightly reboot". The last two carry the house's own
+traffic out to the internet, over a WireGuard tunnel the house's gateway opens:
+`wg-exit` sets up the server's side, and `wg-house` gives the gateway its key —
+same document, "The house's way out".
 
 Two stacks are the server's own rather than an application's, and this
 repository deploys them: [`caddy/`](caddy/), the one proxy every application
@@ -81,7 +86,7 @@ baseline-ops/
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot (server), make omlx-tunnel (house Mac)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
@@ -94,7 +99,9 @@ baseline-ops/
 │   └── restore.md              ← get the data back
 ├── servers/
 │   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
-│   └── vserver.md              ← the machine: what is installed, which accounts, which ports
+│   ├── vserver.md              ← the machine: what is installed, which accounts, which ports
+│   ├── wg-exit                 ← forwarding and NAT for the house's tunnel; make wg-exit ships it
+│   └── wg-house                ← a new key for the house's gateway; make wg-house runs it
 ├── SKILL.md                    ← makes the repo a Claude Code skill
 ├── templates/                  ← copied into each application repository
 │   ├── compose.yaml

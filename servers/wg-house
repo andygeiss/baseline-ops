@@ -1,0 +1,42 @@
+#!/bin/sh
+# Gives the house's gateway a new key for wg0, and prints the WireGuard file
+# the gateway reads. `make wg-house` in this repository runs it over ssh and
+# saves what it prints on your machine; servers/vserver.md, "The house's way
+# out", says what the gateway does with the file.
+#
+# The gateway's private key is made here but never written here: it lives in
+# one variable, then in what this prints, and nowhere else. Every run replaces
+# the key, so the house is offline until its gateway has the new file. Nothing
+# but that file goes to stdout.
+set -eu
+
+dir=/etc/systemd/network
+[ -s "$dir/wg0.key" ] || {
+	echo "wg-house: wg0 has no key — run make wg-exit first" >&2
+	exit 1
+}
+
+key=$(wg genkey)
+mkdir -p "$dir/50-wg0.netdev.d"
+printf '[WireGuardPeer]\nPublicKey=%s\nAllowedIPs=10.77.0.2/32\n' \
+	"$(printf '%s\n' "$key" | wg pubkey)" > "$dir/50-wg0.netdev.d/house.conf"
+
+# networkd never changes a netdev that already exists, so wg0 is made again
+# from its files, the new peer with it. A reload that lands before networkd has
+# seen the old wg0 go makes nothing, so the loop asks again.
+networkctl delete wg0 2>/dev/null || true
+i=0
+until wg show wg0 peers 2>/dev/null | grep -q .; do
+	i=$((i + 1))
+	[ "$i" -le 10 ] || {
+		echo "wg-house: networkd did not make wg0 again — see journalctl -u systemd-networkd" >&2
+		exit 1
+	}
+	networkctl reload
+	sleep 1
+done
+
+# The endpoint is eth0's address: the house knows this server by no name.
+printf '[Interface]\nPrivateKey = %s\nAddress = 10.77.0.2/32\nDNS = 9.9.9.9\n\n[Peer]\nPublicKey = %s\nEndpoint = %s:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25\n' \
+	"$key" "$(wg pubkey < "$dir/wg0.key")" \
+	"$(ip -4 -br addr show dev eth0 | awk '{ split($3, a, "/"); print a[1] }')"

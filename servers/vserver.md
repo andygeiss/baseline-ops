@@ -36,7 +36,9 @@ The house network has no public address (a CGNAT WAN), so this server cannot
 open a connection to a machine in it. A house machine opens one instead, with
 `ssh -R`, and carries its service in. The command belongs to the service being
 carried rather than to whoever calls it — `make omlx-tunnel` in this repository
-owns the one tunnel there is.
+owns the one such tunnel there is. The WireGuard tunnel in "The house's way
+out" is another kind: it carries the house's own traffic out to the internet,
+and opens no way in to a device in the house.
 
 The server's part is one sshd drop-in, `/etc/ssh/sshd_config.d/10-tunnel.conf`,
 which `make sshd-tunnel` in this repository writes:
@@ -97,6 +99,7 @@ owning it.
 |---|---|---|
 | Docker Engine + Compose plugin | Builds and runs everything | From Docker's own repository, never the distribution package — the distro ships an old Engine and often no Compose plugin at all. Follow https://docs.docker.com/engine/install/ for the distribution. Versions in [VERSIONS.md](../VERSIONS.md). |
 | The proxy | One Caddy container fronts every application | Runs from `/opt/caddy`, deployed from this repository's `caddy/` — [runbooks/caddy.md](../runbooks/caddy.md). It is the only stack with a `ports:` block. |
+| wireguard-tools | The `wg` command: makes WireGuard keys, and shows the tunnel | From Ubuntu's archive, so unattended-upgrades patches it. The tunnel itself is the kernel's, and systemd-networkd brings it up, so it runs no service of its own — "The house's way out". |
 | nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy is a container; Go runs inside the build stage. A package installed on the host is a package that drifts. |
 
 Portainer is installed, for a look at what is running — its own stack in
@@ -142,6 +145,7 @@ job by hand: in a version pass, or for a fix that should not wait for 04:00.
 | 22 | sshd, key-only | yes |
 | 80 | the Caddy container: ACME challenge + redirect to HTTPS | yes |
 | 443 (tcp + udp) | the Caddy container: TLS, HTTP/3 | yes |
+| 51820 (udp) | WireGuard, wg0: the house's tunnel — "The house's way out" | yes |
 | everything else | — | no |
 
 **Docker writes its own iptables rules, so a published port is public even
@@ -224,6 +228,102 @@ One address misbehaving right now is one line, and one line to undo:
 iptables -I DOCKER-USER -s 203.0.113.9 -j DROP    # -D in place of -I lets it back in
 ```
 
+## The house's way out
+
+A device on the house's `KNOPPERS` WLAN reaches the internet through this
+server, so every site it talks to sees this server's address instead of the
+house's. The house's gateway, a UniFi, opens a WireGuard tunnel to UDP 51820
+and routes that one network into it. This server lets the traffic out by
+`eth0`, under its own address.
+
+```
+device on KNOPPERS ─► UniFi ══ WireGuard ══► wg0 ─► eth0 ─► the internet
+                      10.77.0.2              10.77.0.1      under this server's address
+```
+
+`make wg-exit` in this repository sets up this side, once. `make wg-house`
+gives the gateway a key, and saves the file its VPN client reads on your
+machine, as `~/Downloads/vserver-wireguard.conf`. Upload it, then delete it:
+whoever holds that file can send anything through this server, under this
+server's address.
+
+```sh
+ssh root@vserver 'wg show wg0'    # "latest handshake" seconds ago: the house is connected
+```
+
+**No device in the house is reachable from here**, and "Tunnels from the
+house" depends on that. wg0 knows one address in the house, the gateway's own,
+`10.77.0.2`. WireGuard sends a packet into the tunnel only to an address the
+peer's `AllowedIPs` names, and lets one out of it only from such an address, so
+the gateway puts its own address on everything it sends — UniFi's VPN client
+does, because a VPN provider demands the same. No container reaches even that
+one address: Docker lets every container connect anywhere, so a rule drops
+whatever enters wg0 that is not an answer.
+
+### Three things the kernel needs
+
+[wg-exit](wg-exit) holds the rules, and `wg-exit.service` runs it after Docker,
+for the same reason as conn-limits: the rules are gone after a reboot, and
+Docker creates the chain.
+
+- **Forwarding.** Docker sets `FORWARD`'s policy to `DROP`, so a packet from the
+  house dies here unless `DOCKER-USER` accepts it.
+- **This server's address.** `MASQUERADE` on `eth0` puts it in place of
+  `10.77.0.2`, so the answers come back here.
+- **Smaller packets.** WireGuard takes 60 bytes of every packet, and the house's
+  line may not carry a full 1500 to begin with, so wg0's MTU is 1380. TCP learns
+  the size only from the MSS in a SYN, so the rules set it to 1340 for every
+  connection through wg0. Without that, a page hangs half loaded.
+
+### Where it lives
+
+| What | Where |
+|---|---|
+| wg0 | `/etc/systemd/network/50-wg0.netdev` and `50-wg0.network`. systemd-networkd brings it up, as it does `eth0`. |
+| This server's key | `/etc/systemd/network/wg0.key`, `root:systemd-network`, `0640`, because networkd reads it as that group. It is made here and never leaves. |
+| The gateway's public key | `/etc/systemd/network/50-wg0.netdev.d/house.conf`, written by `make wg-house`. |
+| The rules | `/usr/local/sbin/wg-exit`, run by `wg-exit.service`. |
+| Forwarding on | `/etc/sysctl.d/60-wg-exit.conf`. Docker turns it on as well; this does not count on that. |
+
+**networkd never changes a netdev that already exists.** An edit to
+`50-wg0.netdev` takes effect after `networkctl delete wg0` and `networkctl
+reload`, which is how `make wg-house` brings in a new key.
+
+**The gateway knows this server by its address, not by a name.** When the
+address changes, run `make wg-house` again and upload the new file.
+
+### What the gateway does
+
+This server forwards whatever reaches wg0; the gateway decides what does. Four
+of its settings decide whether anything goes round the tunnel:
+
+- **`KNOPPERS` is a network of its own**, a VLAN with its own WLAN. A UniFi
+  route picks a network or a device, never a WLAN's name.
+- **A route sends `KNOPPERS` into the VPN client, with its kill switch on.**
+  Without the kill switch, the network falls back to the house's line whenever
+  the tunnel is down. One forum report says the switch did not hold with
+  WireGuard, so test it after any change to the route: pause the VPN client,
+  and a device on `KNOPPERS` must go offline.
+- **DHCP on `KNOPPERS` hands out `9.9.9.9` as DNS.** With the gateway as its
+  resolver, DNS would take the house's line, and the provider would see every
+  name.
+- **`KNOPPERS` has no IPv6.** The tunnel carries IPv4 only, so IPv6 would go
+  round it.
+
+### What it costs
+
+- **`KNOPPERS` is no faster than this server**, and every connection makes the
+  detour through netcup.
+- **Sites see a data centre's address.** Streaming services and some banks block
+  one, or ask more often. That is why `KNOPPERS` is a second WLAN, not the
+  house's only one.
+- **The sites' address is the house's now, too.** An abuse report about
+  something done on `KNOPPERS` reaches netcup, and then you.
+- **Root here sees where the house connects.** The Portainer login is all that
+  stands between the internet and root ("What is installed").
+- **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
+  offline for the same minute as the sites.
+
 ## The `web` network
 
 One Docker network, `web`, created once by hand. The proxy is on it, and so is
@@ -302,6 +402,10 @@ an image, not in a tarball, not in a Compose `environment:` block —
 - Compose mounts them read-only at `/run/secrets/<name>`, and sets
   `CREDENTIALS_DIRECTORY=/run/secrets` so the application finds them there. That
   variable is the contract; the path is this server's answer to it.
+
+One credential belongs to the host rather than to an application: wg0's key,
+`/etc/systemd/network/wg0.key`. It is mode `0640` and group `systemd-network`,
+because networkd reads it as that group ("The house's way out").
 
 ## Disk
 
