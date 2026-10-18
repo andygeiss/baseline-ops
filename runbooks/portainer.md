@@ -67,8 +67,12 @@ A device on `SCHNIPOSA` takes the house's own line, and gets the `403`. That
 line's address cannot be let in as well: the line is behind CGNAT, so the
 address is shared with strangers, and it changes.
 
-The A record stays. Let's Encrypt checks the name from the internet, and the
-`403` does not stand in its way, so the certificate renews as before.
+**The A record stays.** The house looks the name up in public DNS like
+everyone else, so without the record no device there finds the server either.
+Let's Encrypt checks the name from the internet too, and the `403` does not
+stand in its way, so the certificate renews as before. Deleting the record
+would hide nothing: every certificate is written to a public log, and this
+name's first one was in August 2026.
 
 `:9000` is Portainer's plain-HTTP listener. The proxy terminates TLS, so the
 hop from Caddy to Portainer stays inside the `web` network in plain HTTP — the
