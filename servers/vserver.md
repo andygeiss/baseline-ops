@@ -183,6 +183,14 @@ One caps how many connections a single address may hold open at once — 64,
 waiting for a timeout. The other caps how fast it may open new ones — 30 a
 second, bursting to 60, `DROP`, because answering a flood is work.
 
+**Every rule counts only what arrives on `eth0`.** The house's traffic crosses
+`DOCKER-USER` too, on its way out through wg0 ("The house's way out"), and there
+the whole house is one address. Counted with the internet's, it would pass 64
+open connections on an ordinary evening, and its pages would load half. The cap
+also counts only a SYN, a new connection: `connlimit` matches every packet of
+an address over the cap, so without `--syn` the reset would cut the
+connections that address already has as well.
+
 The IPv6 mask is 64 rather than 128, because a /64 is the smallest block that
 means one customer: counting per single address counts nothing when whoever
 floods this server was handed 2^64 of them. Only IPv4 carries traffic today —

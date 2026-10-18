@@ -16,17 +16,23 @@ iptables -S DOCKER-USER >/dev/null 2>&1 || {
 add()  { iptables  -C DOCKER-USER "$@" 2>/dev/null || iptables  -I DOCKER-USER "$@"; }
 add6() { ip6tables -C DOCKER-USER "$@" 2>/dev/null || ip6tables -I DOCKER-USER "$@"; }
 
+# Every rule counts only what arrives on eth0, from the internet. The house's
+# traffic crosses this chain too, on its way out through wg0, and there the
+# whole house is one address (servers/vserver.md, "The house's way out").
+
 # How many connections one address may hold open at once. REJECT, not DROP: a
 # client that hits the cap learns so at once instead of waiting for a timeout.
-add  -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 32 \
+# --syn, because connlimit matches every packet of an address over the cap, and
+# without it the reset would also cut the connections the address already has.
+add  -i eth0 -p tcp --syn --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 32 \
     -j REJECT --reject-with tcp-reset
-add6 -p tcp --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 64 \
+add6 -i eth0 -p tcp --syn --dport 443 -m connlimit --connlimit-above 64 --connlimit-mask 64 \
     -j REJECT --reject-with tcp-reset
 
 # How fast it may open new ones. DROP here, because answering a flood is work.
-add  -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+add  -i eth0 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
     --hashlimit-name https --hashlimit-mode srcip \
     --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
-add6 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
+add6 -i eth0 -p tcp --dport 443 -m conntrack --ctstate NEW -m hashlimit \
     --hashlimit-name https6 --hashlimit-mode srcip \
     --hashlimit-above 30/sec --hashlimit-burst 60 -j DROP
