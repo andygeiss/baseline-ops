@@ -16,7 +16,7 @@ code rather than the server.
 | Docker Engine | **29.9.1** | 2026-10-14 | On the server only — it builds and runs everything. Install from Docker's own repository, never the distribution package. |
 | `golang` base image | **1.27-alpine** | 2026-09-02 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
 | Litestream image | **0.5** | 0.5.17, 2026-08-31 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
-| Portainer CE | **2.45.0** | 2026-08-27 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
+| Portainer CE | **2.45.2** | 2026-10-08 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
 
 ## Version policy
 
