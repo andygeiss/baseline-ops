@@ -47,6 +47,7 @@ which `make sshd-tunnel` in this repository writes:
 GatewayPorts clientspecified    # the client may bind docker0, not just loopback
 ClientAliveInterval 30          # a dead link is noticed within 90 s …
 ClientAliveCountMax 3           # … and the port freed for the reconnect
+AllowStreamLocalForwarding no   # no key forwards a Unix socket
 ```
 
 The tunnel MUST bind `172.17.0.1` — the `docker0` address — and nothing else.
@@ -73,10 +74,9 @@ from="10.77.0.2",restrict,port-forwarding,permitlisten="172.17.0.1:18000",permit
   Studio reaches this server through "The house's way out" and no other way,
   so a copy of the key is no use outside the house.
 
-One way round it is left. `AllowStreamLocalForwarding` is on, so the key can
-still forward a Unix socket, and `/var/run/docker.sock` is root. That holds for
-every key of `andygeiss`. `AllowStreamLocalForwarding no` in `10-tunnel.conf`
-closes it, and takes an sshd reload.
+`port-forwarding` would also give back forwarding a Unix socket, and no option
+in `authorized_keys` narrows that. So the drop-in turns it off for every key,
+since 2026-10-18: `/var/run/docker.sock` is a Unix socket, and it is root.
 
 The Studio finds this server through its own `~/.ssh/config`, not
 `/etc/hosts`: `Host vserver` there names the address and the key. When the

@@ -32,11 +32,13 @@ uninstall:
 
 # Lets an `ssh -R` from a house machine bind the server's docker0 address
 # (172.17.0.1) instead of loopback, so a container can reach a service the
-# house carries in — servers/vserver.md, "Tunnels from the house". Runs twice
-# safely: the drop-in is rewritten, sshd -t checks it before the reload, and
-# the last line prints the settings sshd actually runs with.
+# house carries in — servers/vserver.md, "Tunnels from the house". It also
+# stops every key forwarding a Unix socket: /var/run/docker.sock is root, and
+# the tunnel's key has no passphrase. Runs twice safely: the drop-in is
+# rewritten, sshd -t checks it before the reload, and the last line prints the
+# settings sshd actually runs with.
 sshd-tunnel:
-	ssh $(ROOT) 'printf "GatewayPorts clientspecified\nClientAliveInterval 30\nClientAliveCountMax 3\n" > /etc/ssh/sshd_config.d/10-tunnel.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(gatewayports|clientaliveinterval|clientalivecountmax) "'
+	ssh $(ROOT) 'printf "GatewayPorts clientspecified\nClientAliveInterval 30\nClientAliveCountMax 3\nAllowStreamLocalForwarding no\n" > /etc/ssh/sshd_config.d/10-tunnel.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(gatewayports|clientaliveinterval|clientalivecountmax|allowstreamlocalforwarding) "'
 
 # Caps how many connections one address may hold open on :443, and how fast it
 # may open them, in DOCKER-USER — the chain Docker reads before its own
