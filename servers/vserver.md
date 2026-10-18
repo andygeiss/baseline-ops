@@ -110,10 +110,6 @@ on this host. The password is long, and the socket itself is never published.
 
 ## Updates and the nightly reboot
 
-**Not switched on yet, as of 2026-10-18.** `make auto-reboot` in this
-repository is what changes that. Until then, the server reboots only when a
-person reboots it.
-
 unattended-upgrades installs Ubuntu's security updates every morning, at a
 random minute between 06:00 and 07:00 server time (Europe/Berlin). Most of
 them work at once. A kernel or libc fix does not: it waits for a reboot, and
@@ -134,8 +130,9 @@ launchd agent reopens its tunnel. The reboot on 2026-10-18 showed all of it:
 ssh answered 33 seconds after the command, and every container, `docker0`, and
 the tunnel were back without help.
 
-Without it, the server ran kernel 7.0.0-30 for 52 days while -31, -34 and -38
-were installed and waited. [runbooks/host.md](../runbooks/host.md) is the same
+Before `make auto-reboot` ran on 2026-10-18, nothing rebooted the server: it
+ran kernel 7.0.0-30 for 52 days while -31, -34 and -38 were installed and
+waited. [runbooks/host.md](../runbooks/host.md) is the same
 job by hand: in a version pass, or for a fix that should not wait for 04:00.
 
 ## Ports
