@@ -167,8 +167,8 @@ both, and the unit runs after Docker, because Docker is what creates the chain.
 DOCKER-USER` MUST print a chain — the script refuses to run when it does not. If
 it prints nothing, this Engine runs its nftables backend, the chain answers to
 another name, and every rule above would go where nothing reads it. Engine
-29.8.0 here still uses the iptables backend, and both `xt_connlimit` and
-`xt_hashlimit` load (checked 2026-09-08).
+29.9.1 here still uses the iptables backend, and both `xt_connlimit` and
+`xt_hashlimit` load (checked 2026-10-18).
 
 **conntrack carries weight once these rules exist.** `connlimit` counts entries
 in it, and a full table drops every new connection on this host — including the
