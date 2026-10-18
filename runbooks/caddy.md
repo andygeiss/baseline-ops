@@ -161,19 +161,47 @@ The certificate stays in `caddy_data` until Caddy cleans it up; that is fine.
 ## Upgrade Caddy
 
 One place, not one per application. Bump the row in
-[VERSIONS.md](../VERSIONS.md), then:
+[VERSIONS.md](../VERSIONS.md) and the tag in `caddy/compose.yaml`. Then copy
+both files, and check them against the new image before anything restarts:
 
 ```sh
-scp caddy/compose.yaml andygeiss@vserver:/opt/caddy/
-ssh andygeiss@vserver 'cd /opt/caddy && docker compose pull && docker compose up -d && docker compose ps'
+scp caddy/compose.yaml caddy/Caddyfile andygeiss@vserver:/opt/caddy/
+ssh andygeiss@vserver 'cd /opt/caddy && docker compose pull \
+    && docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile'
+```
+
+`run` starts a throwaway container from the image `compose.yaml` now names,
+with the same files mounted and no port published. The running proxy has not
+read the new files yet. A release can refuse a configuration the last one
+accepted, and 2.11.6 did. A proxy that restarts into a configuration it
+refuses takes every site down, so a failure here stops the upgrade: copy the
+last working files back from git, and fix what the message names. When it
+passes:
+
+```sh
+ssh andygeiss@vserver 'cd /opt/caddy && docker compose up -d && docker compose ps'
+ssh andygeiss@vserver 'cd /opt/caddy && docker compose exec caddy caddy version'   # the version you pinned
 ```
 
 Every site is down for the seconds the container takes to restart. The
 certificates are in the volume, so nothing is requested again.
 
-The same two commands ship an edit to `caddy/Caddyfile`. Edit it in this
-repository, never on the server: the copy there is overwritten by the next
-upgrade.
+An edit to `caddy/Caddyfile` alone needs no restart. Make it in this
+repository, never on the server, because the next upgrade overwrites the copy
+there. Then ship it the way "Add a site" ships a site file:
+
+```sh
+scp caddy/Caddyfile andygeiss@vserver:/opt/caddy/
+ssh andygeiss@vserver 'cd /opt/caddy \
+    && docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile \
+    && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
+```
+
+`docker compose up -d` would not ship it. Compose recreates a container when
+`compose.yaml` changes, not when a file it mounts does. `scp` is the copy to
+use, because it rewrites the file in place, and the running container sees it
+there. A tool that replaces the file instead, like `rsync` or an editor that
+saves by renaming, leaves the container reading the old one.
 
 ## When it goes wrong
 
