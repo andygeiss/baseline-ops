@@ -159,6 +159,11 @@ ssh andygeiss@vserver 'rm /opt/caddy/sites/todo.caddy && cd /opt/caddy \
     && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
 ```
 
+Then delete the name's A record, and its AAAA if it has one. Until it goes,
+the name still leads here, and the proxy, with no site for it, refuses the TLS
+handshake. A name left pointing here also outlasts the server: whoever has this
+address next gets the name with it.
+
 The certificate stays in `caddy_data` until Caddy cleans it up; that is fine.
 
 ## Upgrade Caddy
