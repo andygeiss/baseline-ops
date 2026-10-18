@@ -115,6 +115,9 @@ Read the comment there before adding one. Since 2.11.6, Caddy also sets
 `write_idle` to a minute on its own. That one is safe: it ends only a write
 that makes no progress, and a model's pauses between tokens do not count.
 2.11.6 itself still cut some streams off after a minute; 2.11.7 fixed that.
+On 2026-10-18 one answer proved it: 19 seconds before the first byte while the
+model read a long prompt, then 6000 tokens over 82 seconds, through the tunnel
+and 2.11.7, to the closing `[DONE]`.
 
 A flood that carries a token, or one aimed at the TLS handshake rather than at
 the service, never reaches any of this: Caddy has already paid for the
