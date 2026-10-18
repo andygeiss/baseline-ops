@@ -273,16 +273,16 @@ iptables -I DOCKER-USER -s 203.0.113.9 -j DROP    # -D in place of -I lets it ba
 
 ## The house's way out
 
-A device on the house's `KNOPPERS` WLAN reaches the internet through this
-server, and so does the Mac Studio, so every site they talk to sees this
-server's address instead of the house's. The house's gateway, a UniFi, opens a
-WireGuard tunnel to UDP 51820 and routes that network and the Studio into it.
-This server lets the traffic out by `eth0`, under its own address.
+A device on the house's `KNOPPERS` network reaches the internet through this
+server, so every site it talks to sees this server's address instead of the
+house's. That is every device on the `KNOPPERS` WLAN, and the Mac Studio, which
+is on the network by cable. The house's gateway, a UniFi, opens a WireGuard
+tunnel to UDP 51820 and routes that one network into it. This server lets the
+traffic out by `eth0`, under its own address.
 
 ```
-device on KNOPPERS ─┐
-                    ├─► UniFi ══ WireGuard ══► wg0 ─► eth0 ─► the internet
-Mac Studio ─────────┘   10.77.0.2              10.77.0.1      under this server's address
+device on KNOPPERS ─► UniFi ══ WireGuard ══► wg0 ─► eth0 ─► the internet
+                      10.77.0.2              10.77.0.1      under this server's address
 ```
 
 `make wg-exit` in this repository sets up this side, once. `make wg-house`
@@ -342,26 +342,28 @@ This server forwards whatever reaches wg0; the gateway decides what does. Four
 of its settings decide whether anything goes round the tunnel:
 
 - **`KNOPPERS` is a network of its own**, a VLAN with its own WLAN. A UniFi
-  route picks a network or a device, never a WLAN's name.
-- **A route sends `KNOPPERS` and the Mac Studio into the VPN client, with its
-  kill switch on.** The Studio is on the house's main LAN, by cable. The route
-  names it as a device, and it keeps its address there. Without the kill
-  switch, both fall back to the house's line whenever the tunnel is down. One
-  forum report says the switch did not hold with WireGuard, so test it after
-  any change to the route: pause the VPN client, and a device on `KNOPPERS`
-  must go offline.
+  route picks a network or a device, never a WLAN's name. The Mac Studio is on
+  it by cable: a "Virtual Network Override" for that one client puts it there,
+  with the fixed address `192.168.69.40`.
+- **A route sends `KNOPPERS` into the VPN client, with its kill switch on.**
+  Without the kill switch, the network falls back to the house's line whenever
+  the tunnel is down. One forum report says the switch did not hold with
+  WireGuard, so test it after any change to the route: pause the VPN client,
+  and a device on `KNOPPERS` must go offline.
 - **DHCP on `KNOPPERS` hands out `9.9.9.9` as DNS.** With the gateway as its
   resolver, DNS would take the house's line, and the provider would see every
-  name. The Studio is not on `KNOPPERS` and still asks the gateway, so its
-  lookups take the house's line.
-- **`KNOPPERS` has no IPv6, and neither has the main LAN.** The tunnel carries
-  IPv4 only, so IPv6 would go round it.
+  name. On the main LAN a device does not even get to choose: the gateway
+  answers every query to port 53 itself, whatever address it went to, and asks
+  over the house's line. That is why the Studio joined `KNOPPERS` instead of
+  only the route. In the route alone, its traffic took the tunnel and its
+  lookups did not.
+- **`KNOPPERS` has no IPv6.** The tunnel carries IPv4 only, so IPv6 would go
+  round it.
 
 ### What it costs
 
-- **`KNOPPERS` and the Studio are no faster than this server**, and every
-  connection makes the detour through netcup, a model download on the Studio
-  included.
+- **`KNOPPERS` is no faster than this server**, and every connection makes the
+  detour through netcup, a model download on the Studio included.
 - **Sites see a data centre's address.** Streaming services and some banks block
   one, or ask more often. That is why `KNOPPERS` is a second WLAN, not the
   house's only one.
@@ -372,11 +374,14 @@ of its settings decide whether anything goes round the tunnel:
   ("What is installed").
 - **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
   offline for the same minute as the sites.
-- **ssh from `KNOPPERS` and from the Studio rides the tunnel too.** sshd sees
-  `10.77.0.2`, and a session that was open when a machine joined `KNOPPERS`
-  hangs, because its address changed under it. When the tunnel is down, the
-  kill switch keeps ssh out as well, and the oMLX tunnel with it: mend the
-  tunnel from the house's other WLAN.
+- **ssh from `KNOPPERS` rides the tunnel too.** sshd sees `10.77.0.2`, and a
+  session that was open when a machine joined `KNOPPERS` hangs, because its
+  address changed under it. The Studio's oMLX tunnel is such a session. When
+  the Studio joined, its agent's log said `remote port forwarding failed` six
+  times in a minute, until this server let go of the old session's port, and
+  the tunnel was back within two minutes. When the tunnel is down, the kill
+  switch keeps ssh out as well, and the oMLX tunnel with it: mend the tunnel
+  from the house's other WLAN.
 
 ## The `web` network
 
