@@ -1,0 +1,14 @@
+# The hosts the sandboxed agent may reach over HTTPS, one per line.
+# *.example.com matches every subdomain. A change reaches the sandbox through
+# make claude-sandbox and a new session — runbooks/claude-sandbox.md.
+
+# Claude Code: the model API, and signing in.
+api.anthropic.com
+claude.ai
+platform.claude.com
+
+# Go: modules, their checksums, and govulncheck's database — what make check
+# downloads.
+proxy.golang.org
+sum.golang.org
+vuln.go.dev

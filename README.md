@@ -15,8 +15,9 @@ and in the baseline when it changes the code:
 
 - **Last verified:** 2026-08-27
 - **Servers:** one — `vserver`. Everything here is written for it.
-- **Format:** Markdown, plus the templates every application copies and one
-  script the server runs. No application code.
+- **Format:** Markdown, plus the templates every application copies, one
+  script the server runs, and the sandbox Claude Code runs in on the Mac. No
+  application code.
 
 ## How to use this repository (AI agents)
 
@@ -52,9 +53,10 @@ make auto-reboot    # once per server: reboot at 04:00 when an update needs it
 make wg-exit        # once per server: let the house's WireGuard tunnel out to the internet
 make wg-house       # once, and again to change the key: the house gateway's WireGuard file
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
+make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory
 ```
 
-Six targets, and none of them an application's. Two are the two sides of one
+Seven targets, and none of them an application's. Two are the two sides of one
 tunnel — the server's sshd drop-in and the Mac's launchd agent (`make
 omlx-tunnel-stop` takes that one away again); [servers/vserver.md](servers/vserver.md),
 "Tunnels from the house", says why a house machine carries a service in over
@@ -66,6 +68,12 @@ document, "Updates and the nightly reboot". The last two carry the house's own
 traffic out to the internet, over a WireGuard tunnel the house's gateway opens:
 `wg-exit` sets up the server's side, and `wg-house` gives the gateway its key —
 same document, "The house's way out".
+
+The seventh sets up the Mac you work on, not a server: `make claude-sandbox`
+installs the sandbox Claude Code runs in there
+([runbooks/claude-sandbox.md](runbooks/claude-sandbox.md)). Unlike `make
+install`, it copies its files out of this checkout instead of linking them,
+because the agent inside the sandbox can edit the checkout.
 
 Two stacks are the server's own rather than an application's, and this
 repository deploys them: [`caddy/`](caddy/), the one proxy every application
@@ -85,13 +93,19 @@ baseline-ops/
 ├── caddy/                      ← the server's one proxy stack; deployed from here, copied by nobody
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml
+├── claude-sandbox/             ← the sandbox Claude Code runs in on the Mac; make claude-sandbox installs it
+│   ├── allowlist               ← the hosts the agent may reach, and nothing else
+│   ├── claude-sandbox          ← the launcher: one session, two containers
+│   ├── Containerfile           ← the image both containers run
+│   └── tinyproxy.conf          ← the proxy: HTTPS to the allowlist only
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make claude-sandbox (the Mac you work on)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
+│   ├── claude-sandbox.md       ← run Claude Code in a sandbox that sees one directory; widen what it reaches
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time

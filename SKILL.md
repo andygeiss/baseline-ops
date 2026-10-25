@@ -1,6 +1,6 @@
 ---
 name: engineering-operations
-description: Andy's operations repository — the single source of truth for running applications on his server. Use when deploying, rolling back, restoring data, adding an application to a server, adding a site to the proxy, hardening or installing the machine, or picking a Docker, Caddy, Compose, or Litestream version. Covers the container templates every project copies. For how applications are built, use the engineering-baseline skill instead.
+description: Andy's operations repository — the single source of truth for running applications on his server. Use when deploying, rolling back, restoring data, adding an application to a server, adding a site to the proxy, hardening or installing the machine, running Claude Code in its podman sandbox on the Mac, or picking a Docker, Caddy, Compose, Litestream, or sandbox image version. Covers the container templates every project copies. For how applications are built, use the engineering-baseline skill instead.
 ---
 
 # Engineering Operations

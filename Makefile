@@ -1,9 +1,10 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and six
+# wire it into the current user's Claude Code as a personal skill, and seven
 # targets set up a machine rather than build anything: `sshd-tunnel`,
 # `conn-limits`, `auto-reboot`, `wg-exit` and `wg-house` on the server,
-# `omlx-tunnel` on the house machine — each a line that must be typed exactly,
-# so it is not typed. `install` is the first target: a bare `make` installs.
+# `omlx-tunnel` on the house machine, `claude-sandbox` on the Mac you work on —
+# each a line that must be typed exactly, so it is not typed. `install` is the
+# first target: a bare `make` installs.
 
 SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 
@@ -12,7 +13,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: auto-reboot conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall wg-exit wg-house
+.PHONY: auto-reboot claude-sandbox conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall wg-exit wg-house
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -136,3 +137,26 @@ omlx-tunnel:
 omlx-tunnel-stop:
 	launchctl bootout gui/$$(id -u)/$(TUNNEL_AGENT) 2>/dev/null || true
 	rm -f '$(TUNNEL_PLIST)'
+
+# The sandbox Claude Code runs in on the Mac you work on: a rootless podman
+# container that sees one directory under ~/workspace, and reaches only the
+# hosts in claude-sandbox/allowlist, through a proxy
+# (runbooks/claude-sandbox.md). The files are copied, where `install` above
+# symlinks: an agent in the sandbox can write to this checkout, and a launcher
+# it could edit would let it out on the next start. So a change here reaches
+# the sandbox only through this target — read the diff first. `install`
+# replaces a file rather than writing into it, so a session that is running
+# keeps the launcher it started with. Runs twice safely: the copy is
+# rewritten, the image is built again with --pull, which brings the base
+# images' patches, and the last line prints the Claude Code version the image
+# actually runs. The launcher names the same directory and connection.
+SANDBOX_DIR  = $(HOME)/.local/share/claude-sandbox
+SANDBOX_CONN = podman-machine-default
+
+claude-sandbox:
+	sh -n claude-sandbox/claude-sandbox
+	mkdir -p '$(SANDBOX_DIR)' '$(HOME)/.local/bin'
+	install -m 0644 claude-sandbox/allowlist claude-sandbox/Containerfile claude-sandbox/tinyproxy.conf '$(SANDBOX_DIR)/'
+	install -m 0755 claude-sandbox/claude-sandbox '$(SANDBOX_DIR)/'
+	ln -sf '$(SANDBOX_DIR)/claude-sandbox' '$(HOME)/.local/bin/claude-sandbox'
+	v=$$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' claude-sandbox/Containerfile) && podman --connection $(SANDBOX_CONN) build --pull -t "localhost/claude-sandbox:$$v" '$(SANDBOX_DIR)' && podman --connection $(SANDBOX_CONN) run --rm "localhost/claude-sandbox:$$v" claude --version

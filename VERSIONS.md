@@ -1,8 +1,9 @@
 # Pinned Versions
 
 **Last verified: 2026-10-18.** These are the versions [vserver](servers/vserver.md)
-runs. If your training data disagrees, this file wins. Verify against the source
-links when updating it.
+runs, and, in the second table, the ones the agent sandbox on your Mac runs. If
+your training data disagrees, this file wins. Verify against the source links
+when updating it.
 
 Application dependencies — Go, htmx, scs — are not here. They
 live in the engineering baseline's own `VERSIONS.md`, because they change the
@@ -18,6 +19,20 @@ code rather than the server.
 | Litestream image | **0.5** | 0.5.17, 2026-08-31 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
 | Portainer CE | **2.45.2** | 2026-10-08 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. The next LTS, 3.3, is planned for December 2026: a new major. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
 | wireguard-tools | **1.0.20250521** | 2025-05-21 | On the server only: the `wg` command, for the house's tunnel — [servers/vserver.md](servers/vserver.md), "The house's way out". Ubuntu 26.04's own package, `-1ubuntu1`, so unattended-upgrades moves it, not an edit here. |
+
+## The agent sandbox on the Mac you work on
+
+**Last verified: 2026-10-25.** `make claude-sandbox` builds these into the
+sandbox Claude Code runs in — [runbooks/claude-sandbox.md](runbooks/claude-sandbox.md).
+None of them reaches the server.
+
+| Component | Pinned version | Released | Notes |
+|---|---|---|---|
+| Claude Code | **2.1.310** | 2026-10-23 | `ARG CLAUDE_CODE_VERSION` in `claude-sandbox/Containerfile`. Exact, like the server's own stacks: what the agent can do changes only through an edit someone reads. The image never updates itself. |
+| `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
+| `node` base image | **24-trixie-slim** | 24.22.1, 2026-10-20 | The install stage only: npm picks Claude Code's native binary for the platform. Nothing of Node reaches the sandbox. |
+| tinyproxy | Debian trixie's `tinyproxy-bin` | 1.11.2 | The proxy, from the same image. Debian's own package, so a rebuild with `--pull` moves it, not an edit here. |
+| podman | not pinned | 6.1.4 | Homebrew's, on the Mac; the sandbox was verified with 6.1.4. It needs a rootless connection to the machine — `--userns keep-id` exists only there. |
 
 ## Version policy
 
@@ -68,3 +83,13 @@ code rather than the server.
   https://docs.portainer.io/start/lifecycle (checked 2026-10-18)
 - wireguard-tools: `apt-cache policy wireguard-tools` on vserver, which names
   what Ubuntu's archive offers
+
+## Sources checked for the sandbox (2026-10-25)
+
+- Claude Code: https://www.npmjs.com/package/@anthropic-ai/claude-code — the
+  registry's `time` field dates each release — and
+  https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md
+- Base images: https://hub.docker.com/_/golang and https://hub.docker.com/_/node;
+  Node's release dates: https://nodejs.org/dist/index.json
+- tinyproxy: https://packages.debian.org/trixie/tinyproxy-bin
+- podman: `podman --version` on the Mac

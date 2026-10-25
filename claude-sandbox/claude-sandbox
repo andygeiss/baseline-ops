@@ -1,0 +1,117 @@
+#!/bin/sh
+# claude-sandbox — run Claude Code in a rootless podman container that sees the
+# directory it starts in and nothing else of the Mac. The directory must be
+# ~/workspace or inside it. runbooks/claude-sandbox.md is the manual.
+#
+#   claude-sandbox [claude arguments]    claude-sandbox --continue, for one
+#   claude-sandbox --shell [bash args]   a shell in the same sandbox, to look around
+#
+# make claude-sandbox installs this file and builds the image. Only the
+# installed copy runs: the checkout lives in ~/workspace, where the agent can
+# edit it, and a launcher the agent could edit would let it out next time.
+set -eu
+
+conn=podman-machine-default            # the machine's rootless connection
+home=$HOME/.local/share/claude-sandbox # where make claude-sandbox copies the files
+net=claude-sandbox                     # the agent's network, which has no way out
+
+die() { printf 'claude-sandbox: %s\n' "$*" >&2; exit 1; }
+
+# Every podman call goes to the machine's rootless side. --userns keep-id works
+# only there, and this Mac's default connection is the rootful one.
+podman() { command podman --connection "$conn" "$@"; }
+
+# The directory the agent gets, with symlinks resolved, so a link cannot point
+# the mount outside ~/workspace.
+here=$(pwd -P)
+root=$(cd "$HOME/workspace" && pwd -P) || die "there is no $HOME/workspace"
+case $here/ in
+"$root"/*) ;;
+*) die "start me in $root or below it, not in $here" ;;
+esac
+
+[ -f "$home/Containerfile" ] || die "not installed — run make claude-sandbox in baseline-ops"
+version=$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' "$home/Containerfile")
+image=localhost/claude-sandbox:$version
+[ "$(podman info --format '{{.Host.Security.Rootless}}')" = true ] ||
+	die "the connection $conn is not rootless"
+podman image exists "$image" ||
+	die "there is no image $image — run make claude-sandbox in baseline-ops"
+
+cmd=claude
+if [ "${1:-}" = --shell ]; then
+	shift
+	cmd=bash
+fi
+
+# Internal means no gateway: the only thing the agent reaches on this network
+# is the proxy. No DNS either, so it cannot carry data out in name lookups.
+podman network exists "$net" ||
+	podman network create --internal --disable-dns "$net" > /dev/null
+
+# The proxy is the agent's only way out. It sits on both networks, reads the
+# allowlist when it starts, and lives exactly as long as this session.
+proxy=claude-sandbox-proxy-$$
+podman run --detach --rm --name "$proxy" \
+	--network podman --network "$net" \
+	--read-only --cap-drop all --security-opt no-new-privileges --user nobody \
+	--volume "$home/tinyproxy.conf:/etc/tinyproxy/sandbox.conf:ro" \
+	--volume "$home/allowlist:/etc/tinyproxy/allowlist:ro" \
+	"$image" tinyproxy -d -c /etc/tinyproxy/sandbox.conf > /dev/null
+
+# On the way out, name the hosts the proxy refused, so a missing one is a line
+# in the allowlist away. Then stop the proxy.
+finish() {
+	refused=$(podman logs "$proxy" 2>&1 |
+		sed -n 's/.*refused on filtered domain "\([^"]*\)".*/\1/p' | sort | uniq -c)
+	podman stop --time 0 "$proxy" > /dev/null 2>&1 || true
+	[ -z "$refused" ] ||
+		printf 'claude-sandbox: the proxy refused these hosts (claude-sandbox/allowlist in baseline-ops lets one in):\n%s\n' "$refused" >&2
+}
+trap finish EXIT
+trap 'exit 1' HUP INT TERM
+
+ip=$(podman inspect --format "{{(index .NetworkSettings.Networks \"$net\").IPAddress}}" "$proxy")
+url=http://$ip:8888
+
+# Sign-in without a browser: a token from `claude setup-token`, kept in the
+# login keychain. Without one, each directory signs in once, with /login.
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] &&
+	token=$(security find-generic-password -s claude-sandbox -w 2> /dev/null); then
+	export CLAUDE_CODE_OAUTH_TOKEN="$token"
+fi
+
+# Your git identity, so the agent's commits are yours, and it has no reason to
+# write one into the project's .git/config.
+if name=$(git config user.name) && email=$(git config user.email); then
+	export GIT_AUTHOR_NAME="$name" GIT_AUTHOR_EMAIL="$email" \
+		GIT_COMMITTER_NAME="$name" GIT_COMMITTER_EMAIL="$email"
+fi
+
+# The agent's home is a volume per directory: Claude's sign-in, settings and
+# sessions, and Go's caches, from one project never show up in another. The
+# hash tells apart two directories with the same name.
+name=$(printf %s "${here##*/}" | tr -c 'A-Za-z0-9_.-' -)
+vol=claude-sandbox-$name-$(printf %s "$here" | shasum -a 256 | cut -c 1-8)
+
+tty=false
+[ -t 0 ] && tty=true
+
+# The directory is mounted at the same path as on the Mac, so the paths in
+# Claude's answers and in its per-project history are the Mac's paths.
+# --detach-keys "" hands ctrl-p back to Claude Code.
+podman run --rm --interactive --tty="$tty" --detach-keys "" --init \
+	--name "claude-sandbox-$$" --hostname claude-sandbox \
+	--network "$net" --dns none \
+	--userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+	--cap-drop all --security-opt no-new-privileges --read-only \
+	--volume "$vol:/home/agent" \
+	--volume "$here:$here" --workdir "$here" \
+	--env HTTPS_PROXY="$url" --env https_proxy="$url" \
+	--env HTTP_PROXY="$url" --env http_proxy="$url" \
+	--env NO_PROXY=localhost,127.0.0.1 --env no_proxy=localhost,127.0.0.1 \
+	--env TERM=xterm-256color --env COLORTERM \
+	--env CLAUDE_CODE_OAUTH_TOKEN \
+	--env GIT_AUTHOR_NAME --env GIT_AUTHOR_EMAIL \
+	--env GIT_COMMITTER_NAME --env GIT_COMMITTER_EMAIL \
+	"$image" "$cmd" "$@"

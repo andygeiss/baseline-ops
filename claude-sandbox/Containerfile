@@ -1,0 +1,50 @@
+# The sandbox Claude Code runs in on the Mac you work on —
+# runbooks/claude-sandbox.md. make claude-sandbox builds it. One image runs
+# both containers of a session: the agent, and the proxy in front of it as
+# nobody.
+
+# Claude Code's npm package carries one native binary per platform, and npm is
+# what picks the right one. Node is needed for that step alone, so it stays in
+# this stage and never reaches the sandbox.
+FROM docker.io/library/node:24-trixie-slim AS claude
+ARG CLAUDE_CODE_VERSION=2.1.310
+RUN npm install --global --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+ && cp "$(npm root --global)/@anthropic-ai/claude-code/bin/claude.exe" /claude
+
+# Debian, not alpine: the commands an agent writes assume GNU tools and glibc,
+# not busybox and musl. The image already ships what make check needs beyond
+# Go — gcc for go test -race, git, and make.
+FROM docker.io/library/golang:1.27-trixie
+
+# jq and ripgrep are for the agent's shell. tinyproxy-bin is the proxy alone;
+# the tinyproxy package around it adds a service, logrotate, and cron.
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends jq ripgrep tinyproxy-bin \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=claude /claude /usr/local/bin/claude
+
+# uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
+# so a file the agent writes in the project belongs to you on the Mac.
+RUN useradd --create-home --uid 1000 --shell /bin/bash agent
+
+# The root filesystem is read-only in the sandbox, so Go keeps its module and
+# build caches in the home volume, not in the base image's /go. GOTOOLCHAIN
+# stops go from downloading a newer toolchain than this image's.
+#
+# The Claude Code settings keep the agent to what the allowlist lets through:
+# no self-update (the image pins the version), no telemetry, no claude.ai
+# connectors — they reach your mail and your files — and no publishing pages
+# to claude.ai.
+ENV LANG=C.UTF-8 \
+    GOPATH=/home/agent/go \
+    GOTOOLCHAIN=local \
+    PATH=/home/agent/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    ENABLE_CLAUDEAI_MCP_SERVERS=false \
+    CLAUDE_CODE_DISABLE_ARTIFACT=1
+
+USER agent
+WORKDIR /home/agent
+CMD ["claude"]
