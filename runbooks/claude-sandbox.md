@@ -120,6 +120,13 @@ The image never updates itself (`DISABLE_AUTOUPDATER=1`). Run
 `make claude-sandbox` after a Go patch release too: it builds with `--pull`, so
 the image picks up Go's and Debian's patches under the minor tags.
 
+GitHub builds the same image every Tuesday, and on every change to
+`claude-sandbox/` — [`.github/workflows/claude-sandbox.yml`](../.github/workflows/claude-sandbox.yml).
+A red run means something moved upstream: a base image, a Debian package, or
+the way Claude Code's npm package ships its binary. The run names the check
+that failed. Fix it here before your next `make claude-sandbox`, which would
+build the same broken image.
+
 ## Start a directory over, or remove the sandbox
 
 A directory's volume holds its sign-in, settings and sessions. Remove the

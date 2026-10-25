@@ -87,6 +87,7 @@ yet — the steps have not run twice.
 ```
 baseline-ops/
 ├── .github/workflows/
+│   ├── claude-sandbox.yml      ← builds claude-sandbox/Containerfile on arm64, like the Mac; checks what the launcher counts on
 │   └── templates.yml           ← builds templates/Dockerfile against baseline-reference
 ├── bin/
 │   └── deploy                  ← runbooks/deploy.md as one command: ship a tag, or roll back
@@ -126,8 +127,8 @@ baseline-ops/
 
 ## How the templates are verified
 
-The container templates are the only files here a machine can check, and nothing
-in this repository can build them — it holds no code. So
+The container templates are files a machine can check, but nothing in this
+repository can build them — it holds no code. So
 [`.github/workflows/templates.yml`](.github/workflows/templates.yml) borrows
 some: it checks out
 [baseline-reference](https://github.com/andygeiss/baseline-reference), the
@@ -163,6 +164,26 @@ edits. Copies nothing builds drift: baseline-reference carried one that had
 grown extra directives, rewritten comments, and a link to a baseline document
 that no longer exists — which is why the gate lives here now, and the copy does
 not live there.
+
+## How the sandbox image is verified
+
+[`.github/workflows/claude-sandbox.yml`](.github/workflows/claude-sandbox.yml)
+builds `claude-sandbox/Containerfile` on an arm64 runner, the Mac's
+architecture, and asserts four things the launcher counts on:
+
+1. Claude Code runs, at the version the Containerfile pins;
+2. the agent is uid 1000, the uid the launcher maps your Mac user to;
+3. `go test -race` works, which `make check` needs;
+4. the proxy lets an allowlisted host through, and gives any other host — or
+   an allowlisted one on another port — its own 403, logged the way the
+   launcher reads it at the end of a session.
+
+It runs on every change to `claude-sandbox/`, and every Tuesday:
+`golang:1.27-trixie`, `node:24-trixie-slim`, and Debian's packages move under
+their tags. The launcher's own flags — the mounts, the network, the dropped
+capabilities — need the Mac's podman machine, so
+[runbooks/claude-sandbox.md](runbooks/claude-sandbox.md), "Check that it
+holds", covers them by hand.
 
 ## What is deliberately not here
 

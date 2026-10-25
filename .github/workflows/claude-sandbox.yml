@@ -1,0 +1,137 @@
+name: claude-sandbox
+
+# The sandbox image on the Mac (runbooks/claude-sandbox.md) is built from minor
+# tags and Debian's packages, so what it holds moves under a Containerfile
+# nobody edited. This gate builds it the way make claude-sandbox does, and
+# checks what the launcher counts on and nothing else would catch: the pinned
+# Claude Code runs, the agent is uid 1000, go test -race works, and the proxy
+# lets the allowlist through and refuses everything else.
+#
+# The launcher's own flags — the mounts, the internal network, the dropped
+# capabilities — need the Mac's podman machine. The runbook's "Check that it
+# holds" covers those, by hand.
+on:
+  push:
+    branches: [main]
+    paths: ["claude-sandbox/**", ".github/workflows/claude-sandbox.yml"]
+  pull_request:
+    paths: ["claude-sandbox/**", ".github/workflows/claude-sandbox.yml"]
+  schedule:
+    - cron: "0 6 * * 2"   # weekly: golang:1.27-trixie, node:24-trixie-slim and Debian's packages move under their tags
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: claude-sandbox-check
+  PROXY: http://proxy:8888
+
+jobs:
+  containerfile:
+    # arm64, like the Mac. npm picks Claude Code's binary per platform, and
+    # Debian builds its packages per architecture, so an amd64 runner would
+    # check binaries the Mac never runs.
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      # --pull, as make claude-sandbox builds: the base images as they are
+      # today, not as the runner cached them.
+      - name: Build
+        run: docker build --pull -t "$IMAGE" -f claude-sandbox/Containerfile claude-sandbox
+
+      # Claude Code's npm package is a wrapper, and the Containerfile copies the
+      # binary out of it by path. When Anthropic changes how the package ships
+      # it, the next version bump fails here: at the build, or with a binary
+      # that does not run.
+      - name: Claude Code runs, at the pinned version
+        run: |
+          set -eu
+          want=$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' claude-sandbox/Containerfile)
+          got=$(docker run --rm "$IMAGE" claude --version)
+          echo "$got"
+          case "$got" in
+            "$want "*) ;;
+            *) echo "want Claude Code $want"; exit 1 ;;
+          esac
+
+      # The launcher maps your Mac user to uid 1000 (--userns keep-id), which is
+      # what makes the agent's files yours. Under any other uid they belong to a
+      # stranger.
+      - name: The agent is uid 1000
+        run: |
+          set -eu
+          got=$(docker run --rm "$IMAGE" sh -c 'echo "$(id -un):$(id -u)"')
+          [ "$got" = agent:1000 ] || { echo "runs as $got, want agent:1000"; exit 1; }
+
+      # make check runs go test -race, which needs cgo and gcc. The Containerfile
+      # counts on the base image to ship both.
+      - name: go test -race works
+        run: |
+          docker run --rm "$IMAGE" sh -euc '
+            cd "$(mktemp -d)"
+            go mod init example.com/race 2> /dev/null
+            printf "package race\n\nimport \"testing\"\n\nfunc TestRace(t *testing.T) {}\n" > race_test.go
+            go test -race ./...'
+
+      # The proxy is the agent's only way out, and Debian's tinyproxy moves
+      # under it. A release that dropped FilterType fnmatch would not start, or
+      # would start and filter nothing. It runs here as the launcher runs it:
+      # as nobody, read-only, with no capabilities, its two files mounted
+      # read-only.
+      - name: Start the proxy as the launcher does
+        run: |
+          set -eux
+          docker network create sandbox
+          docker run -d --name proxy --network sandbox \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true --user nobody \
+            -v "$PWD/claude-sandbox/tinyproxy.conf:/etc/tinyproxy/sandbox.conf:ro" \
+            -v "$PWD/claude-sandbox/allowlist:/etc/tinyproxy/allowlist:ro" \
+            "$IMAGE" tinyproxy -d -c /etc/tinyproxy/sandbox.conf
+
+      # Any answer from Anthropic's side counts — the API's root says 404. The
+      # retries wait for the proxy to listen.
+      - name: An allowlisted host gets through
+        run: |
+          set -eu
+          code=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
+            curl -sS --retry 5 --retry-connrefused --retry-delay 1 -o /dev/null -w '%{http_code}' https://api.anthropic.com/)
+          echo "api.anthropic.com answered $code"
+
+      # Refused has to mean the proxy's own 403 on the CONNECT: a network error
+      # fails the same curl, and would pass a check that only wanted a failure.
+      # The launcher names refused hosts at the end of a session by reading
+      # this exact log line.
+      - name: Any other host gets the proxy's 403, logged the way the launcher reads it
+        run: |
+          set -eu
+          if out=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
+            curl -sS -o /dev/null https://example.com/ 2>&1); then
+            echo "example.com got through the proxy"; exit 1
+          fi
+          echo "$out"
+          case "$out" in
+            *"CONNECT tunnel failed, response 403"*) ;;
+            *) echo "failed, but not with the proxy's 403"; exit 1 ;;
+          esac
+          docker logs proxy 2>&1 | grep -F 'refused on filtered domain "example.com"'
+
+      # ConnectPort 443: an allowlisted host stays shut on any other port, so
+      # the agent gets HTTPS and not SSH or mail.
+      - name: An allowlisted host on another port gets the proxy's 403
+        run: |
+          set -eu
+          if out=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
+            curl -sS -o /dev/null --max-time 10 https://api.anthropic.com:22/ 2>&1); then
+            echo "port 22 got through the proxy"; exit 1
+          fi
+          echo "$out"
+          case "$out" in
+            *"CONNECT tunnel failed, response 403"*) ;;
+            *) echo "failed, but not with the proxy's 403"; exit 1 ;;
+          esac
+
+      - name: Proxy logs
+        if: always()
+        run: docker logs proxy || true
