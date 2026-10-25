@@ -24,6 +24,12 @@ RUN apt-get update \
 
 COPY --from=claude /claude /usr/local/bin/claude
 
+# The proxy's two files travel in the image. The podman machine shares only
+# ~/workspace, so it cannot mount them from the Mac, and a changed allowlist
+# reaches the proxy through make claude-sandbox like any other change here.
+COPY tinyproxy.conf /etc/tinyproxy/sandbox.conf
+COPY allowlist /etc/tinyproxy/allowlist
+
 # uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
 # so a file the agent writes in the project belongs to you on the Mac.
 RUN useradd --create-home --uid 1000 --shell /bin/bash agent

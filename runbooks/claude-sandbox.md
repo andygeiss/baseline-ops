@@ -39,12 +39,43 @@ agent ──(network claude-sandbox: no gateway, no DNS)──▶ proxy ──(p
 - **The agent** runs as uid 1000, which podman maps to your Mac user, with no
   capabilities and a read-only root filesystem. Its only route anywhere is the
   proxy, through `HTTPS_PROXY`.
-- **The proxy** is tinyproxy, running as `nobody`. It reads `tinyproxy.conf`
-  and `allowlist` when it starts, and stops when the session ends.
+- **The proxy** is tinyproxy, running as `nobody`. It filters by the
+  `tinyproxy.conf` and `allowlist` built into the image, and stops when the
+  session ends.
 
 ## Install, once per Mac
 
-podman must be running, with its default machine (`podman machine start`).
+The podman machine is a Linux VM, and it must share only `~/workspace` with
+the Mac. Out of the box it shares all of `/Users`, `/private`, and
+`/var/folders`, and `~/.config/containers` read-write — the folder that holds
+the machine's own settings, the shared folders among them. So the default
+machine is replaced with one that shares `~/workspace` and nothing else.
+
+Removing a machine deletes every image, container and volume in it, so save
+what you need first. `podman volume export <volume> --output <file>` writes a
+volume to a tar file, and `podman volume import` reads it back into the new
+machine. Then:
+
+```sh
+podman machine stop
+podman machine rm podman-machine-default
+podman machine init --rootful --volume "$HOME/workspace:$HOME/workspace"
+podman machine start
+podman machine ssh ls -A "$HOME"            # workspace: nothing else of your home
+```
+
+`--volume` replaces podman's whole default list, so the one folder named is the
+only one shared. `--rootful` keeps the machine's default connection rootful;
+the sandbox uses the rootless one either way.
+
+Rosetta goes with `~/.config/containers`: podman 6.1 switches it on through
+that folder and has no flag for it. amd64 images still run, through QEMU, only
+slower. Every image the sandbox and the templates use has an arm64 build.
+
+From then on, no container on this Mac can bind-mount a folder outside
+`~/workspace`. abi-peak's local Caddy mounts `~/.local/share/abi-peak/caddy`,
+so it does not start until its Caddyfile lives under `~/workspace`.
+
 Then, from this repository:
 
 ```sh
@@ -158,12 +189,10 @@ podman --connection podman-machine-default network rm claude-sandbox
   includes `baseline/` and `baseline-ops/`: the skills of the Claude Code you
   run outside the sandbox, and this launcher's source. Start it in the project
   instead.
-- **The podman machine shares all of `/Users`.** The container shows the agent
-  one directory, but the Linux VM it runs in sees your whole home. An agent
-  that broke out of the container, through a bug in podman or in the Linux
-  kernel, would see it too. A machine of its own that shares only
-  `~/workspace` would close that gap. It has a price: only one podman machine
-  runs at a time, so it and the default machine would take turns.
+- **The podman machine shares all of `~/workspace`.** The container shows the
+  agent one directory, but the Linux VM it runs in sees every project. An
+  agent that broke out of the container, through a bug in podman or in the
+  Linux kernel, would see them too — and nothing else of the Mac.
 - **An allowed host can carry data out.** The agent sends your code to
   `api.anthropic.com`, because that is how Claude Code works. And the Go module
   proxy fetches any module path it is asked for, so a request can carry data

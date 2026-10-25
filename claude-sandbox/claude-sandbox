@@ -49,14 +49,13 @@ fi
 podman network exists "$net" ||
 	podman network create --internal --disable-dns "$net" > /dev/null
 
-# The proxy is the agent's only way out. It sits on both networks, reads the
-# allowlist when it starts, and lives exactly as long as this session.
+# The proxy is the agent's only way out. It sits on both networks, filters by
+# the allowlist the image was built with, and lives exactly as long as this
+# session.
 proxy=claude-sandbox-proxy-$$
 podman run --detach --rm --name "$proxy" \
 	--network podman --network "$net" \
 	--read-only --cap-drop all --security-opt no-new-privileges --user nobody \
-	--volume "$home/tinyproxy.conf:/etc/tinyproxy/sandbox.conf:ro" \
-	--volume "$home/allowlist:/etc/tinyproxy/allowlist:ro" \
 	"$image" tinyproxy -d -c /etc/tinyproxy/sandbox.conf > /dev/null
 
 # On the way out, name the hosts the proxy refused, so a missing one is a line

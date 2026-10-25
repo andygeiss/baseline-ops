@@ -32,7 +32,7 @@ None of them reaches the server.
 | `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
 | `node` base image | **24-trixie-slim** | 24.22.1, 2026-10-20 | The install stage only: npm picks Claude Code's native binary for the platform. Nothing of Node reaches the sandbox. |
 | tinyproxy | Debian trixie's `tinyproxy-bin` | 1.11.2 | The proxy, from the same image. Debian's own package, so a rebuild with `--pull` moves it, not an edit here. |
-| podman | not pinned | 6.1.4 | Homebrew's, on the Mac; the sandbox was verified with 6.1.4. It needs a rootless connection to the machine — `--userns keep-id` exists only there. |
+| podman | not pinned | 6.1.4 | Homebrew's, on the Mac; the sandbox was verified with 6.1.4. It needs a rootless connection to the machine — `--userns keep-id` exists only there — and a machine that shares only `~/workspace`: 6.1.4's default shares all of `/Users`, and `~/.config/containers` read-write. |
 
 ## Version policy
 

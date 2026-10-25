@@ -78,16 +78,14 @@ jobs:
       # The proxy is the agent's only way out, and Debian's tinyproxy moves
       # under it. A release that dropped FilterType fnmatch would not start, or
       # would start and filter nothing. It runs here as the launcher runs it:
-      # as nobody, read-only, with no capabilities, its two files mounted
-      # read-only.
+      # as nobody, read-only, with no capabilities, on the config and allowlist
+      # the image carries.
       - name: Start the proxy as the launcher does
         run: |
           set -eux
           docker network create sandbox
           docker run -d --name proxy --network sandbox \
             --read-only --cap-drop ALL --security-opt no-new-privileges:true --user nobody \
-            -v "$PWD/claude-sandbox/tinyproxy.conf:/etc/tinyproxy/sandbox.conf:ro" \
-            -v "$PWD/claude-sandbox/allowlist:/etc/tinyproxy/allowlist:ro" \
             "$IMAGE" tinyproxy -d -c /etc/tinyproxy/sandbox.conf
 
       # Any answer from Anthropic's side counts — the API's root says 404. The
