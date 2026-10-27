@@ -74,8 +74,8 @@ that folder and has no flag for it. amd64 images still run, through QEMU, only
 slower. Every image the sandbox and the templates use has an arm64 build.
 
 From then on, no container on this Mac can bind-mount a folder outside
-`~/workspace`. abi-peak's local Caddy mounts `~/.local/share/abi-peak/caddy`,
-so it does not start until its Caddyfile lives under `~/workspace`.
+`~/workspace`. That is why abi-peak's local proxy lives in
+`~/workspace/abi-peak/caddy`, apart from its services' stacks.
 
 Then, from this repository:
 
