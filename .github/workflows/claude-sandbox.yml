@@ -93,6 +93,13 @@ jobs:
             *) echo "the line names no model"; exit 1 ;;
           esac
 
+      # Every session starts on Opus 5.5, in old volumes and new.
+      - name: The managed settings start on Opus 5.5
+        run: |
+          set -eu
+          got=$(docker run --rm "$IMAGE" jq -r .model /etc/claude-code/managed-settings.json)
+          [ "$got" = claude-opus-5-5 ] || { echo "want model claude-opus-5-5, got $got"; exit 1; }
+
       # The launcher maps your Mac user to uid 1000 (--userns keep-id), which is
       # what makes the agent's files yours. Under any other uid they belong to a
       # stranger.

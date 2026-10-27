@@ -66,12 +66,13 @@ and says which. To give the agent another skill, add its name to the list in
 
 Claude Code in the sandbox shows the same status line as on the Mac:
 [statusline](https://github.com/andygeiss/statusline), built into the image.
-The image's `/etc/claude-code/managed-settings.json` points Claude Code at it.
-A setting in `~/.claude` would live in each directory's volume, which an image
+The image's `/etc/claude-code/managed-settings.json` points Claude Code at it,
+and starts every session on Opus 5.5 (`claude-opus-5-5`); `/model` switches
+for one session. A setting in `~/.claude` would live in each directory's volume, which an image
 change never reaches.
 
 ```text
-…/workspace/sandbox-status-check │ Sonnet 5.5 │ medium │ ⎇ main
+…/workspace/sandbox-status-check │ Opus 5.5 │ medium │ ⎇ main
 ```
 
 The directory starts with `…`, not `~`: the agent's home is `/home/agent`, so

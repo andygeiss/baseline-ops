@@ -44,9 +44,10 @@ COPY --from=statusline /go/bin/statusline /usr/local/bin/statusline
 # Settings in ~/.claude live in each directory's volume, and an image change
 # never reaches a volume that exists. Claude Code also reads
 # /etc/claude-code/managed-settings.json, from the image, so every session gets
-# the status line, in old volumes and new.
+# the status line and starts on Opus 5.5, in old volumes and new. /model still
+# switches the model for one session.
 RUN mkdir /etc/claude-code \
- && printf '{"statusLine":{"type":"command","command":"/usr/local/bin/statusline"}}\n' > /etc/claude-code/managed-settings.json
+ && printf '{"model":"claude-opus-5-5","statusLine":{"type":"command","command":"/usr/local/bin/statusline"}}\n' > /etc/claude-code/managed-settings.json
 
 # uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
 # so a file the agent writes in the project belongs to you on the Mac.
