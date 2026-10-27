@@ -135,9 +135,26 @@ done
 # Claude Code reads skills from ~/.claude/skills, in the home volume. podman
 # would make a mount point's missing folders there as root, and then Claude
 # could not write its own settings. So the agent makes them first.
+#
+# The same run marks Claude's first-run setup done in ~/.claude.json. Without
+# that, a new directory starts with a theme picker and a sign-in prompt,
+# although the token signs Claude in already. The rest of the file stays as it
+# is, and a file jq cannot read is left alone, for Claude to report.
 podman run --rm --network none --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
 	--cap-drop all --security-opt no-new-privileges --read-only \
-	--volume "$vol:/home/agent" "$image" mkdir -p /home/agent/.claude/skills
+	--volume "$vol:/home/agent" "$image" sh -c '
+		mkdir -p ~/.claude/skills || exit 1
+		umask 077
+		f=~/.claude.json
+		if [ ! -s "$f" ]; then
+			jq -n "{hasCompletedOnboarding: true}" > "$f"
+		elif [ "$(jq .hasCompletedOnboarding "$f" 2> /dev/null)" != true ]; then
+			jq ".hasCompletedOnboarding = true" "$f" > "$f.new" 2> /dev/null && mv "$f.new" "$f" || {
+				rm -f "$f.new"
+				echo "claude-sandbox: ~/.claude.json is not JSON, so Claude starts with its first-run setup" >&2
+			}
+		fi
+		exit 0'
 
 # A terminal on both ends is a session you type into: it gets a terminal and
 # your keys. Output into a pipe or a file gets neither: no terminal codes land

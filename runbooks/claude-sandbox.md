@@ -141,6 +141,12 @@ A token, not `/login`: a `/login` sign-in would live in one directory's volume,
 so every new directory would ask again. And `claude-sandbox -p` cannot answer
 a sign-in prompt at all.
 
+Claude's own first-run setup would still ask, in every new directory: a theme
+picker, then a sign-in prompt that the token makes pointless. So the launcher
+marks that setup done in the directory's volume before Claude starts. Claude
+still asks once per directory whether you trust the folder. Answer with the
+arrow keys: the answer it starts on is "No, exit".
+
 The token lasts a year. When it runs out, run both commands again: `-U`
 replaces the old token in the keychain.
 
@@ -152,6 +158,7 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
 claude-sandbox --shell -c 'ls ~/.claude/skills'    # engineering-baseline  engineering-operations
 claude-sandbox --shell -c 'touch ~/.claude/skills/engineering-baseline/x'    # Read-only file system
+claude-sandbox --shell -c 'jq .hasCompletedOnboarding ~/.claude.json'    # true: no first-run setup
 claude-sandbox -p --output-format stream-json --verbose hi | jq -c 'select(.subtype == "init") | .skills | map(select(startswith("engineering-")))'    # both skills: Claude found them
 claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://example.com/'    # 200: a public site answered
 claude-sandbox --shell -c 'curl -sS https://192.168.1.1/'    # CONNECT tunnel failed, response 403
