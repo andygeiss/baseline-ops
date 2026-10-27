@@ -20,6 +20,13 @@ FROM docker.io/library/golang:1.27-trixie AS egress
 ARG EGRESS_VERSION=v0.1.1
 RUN CGO_ENABLED=0 go install -trimpath "github.com/andygeiss/egress@${EGRESS_VERSION}"
 
+# statusline draws the line Claude Code shows under the prompt, the same one as
+# on the Mac (github.com/andygeiss/statusline). Built like egress, for the same
+# reasons.
+FROM docker.io/library/golang:1.27-trixie AS statusline
+ARG STATUSLINE_VERSION=v0.3.1
+RUN CGO_ENABLED=0 go install -trimpath "github.com/andygeiss/statusline@${STATUSLINE_VERSION}"
+
 # Debian, not alpine: the commands an agent writes assume GNU tools and glibc,
 # not busybox and musl. The image already ships what make check needs beyond
 # Go — gcc for go test -race, git, and make.
@@ -32,6 +39,14 @@ RUN apt-get update \
 
 COPY --from=claude /claude /usr/local/bin/claude
 COPY --from=egress /go/bin/egress /usr/local/bin/egress
+COPY --from=statusline /go/bin/statusline /usr/local/bin/statusline
+
+# Settings in ~/.claude live in each directory's volume, and an image change
+# never reaches a volume that exists. Claude Code also reads
+# /etc/claude-code/managed-settings.json, from the image, so every session gets
+# the status line, in old volumes and new.
+RUN mkdir /etc/claude-code \
+ && printf '{"statusLine":{"type":"command","command":"/usr/local/bin/statusline"}}\n' > /etc/claude-code/managed-settings.json
 
 # uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
 # so a file the agent writes in the project belongs to you on the Mac.

@@ -96,7 +96,7 @@ baseline-ops/
 │   └── compose.yaml
 ├── claude-sandbox/             ← the sandbox Claude Code runs in on the Mac; make claude-sandbox installs it
 │   ├── claude-sandbox          ← the launcher: one session, two containers
-│   └── Containerfile           ← the image both containers run: Claude Code, and egress as the proxy
+│   └── Containerfile           ← the image both containers run: Claude Code, egress as the proxy, and statusline
 ├── LICENSE                     ← MIT
 ├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make claude-sandbox (the Mac you work on)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
@@ -167,14 +167,17 @@ not live there.
 
 [`.github/workflows/claude-sandbox.yml`](.github/workflows/claude-sandbox.yml)
 builds `claude-sandbox/Containerfile` on an arm64 runner, the Mac's
-architecture, and asserts four things the launcher counts on:
+architecture, and asserts five things the sandbox counts on:
 
-1. Claude Code and egress run, at the versions the Containerfile pins;
+1. Claude Code, egress and statusline run, at the versions the Containerfile
+   pins;
 2. the agent is uid 1000, the uid the launcher maps your Mac user to;
 3. `go test -race` works, which `make check` needs;
 4. egress lets a public host through, and gives a private address — or a
    public host on another port — its own 403, logged the way the launcher
-   reads it at the end of a session.
+   reads it at the end of a session;
+5. the status line command that the image's managed settings name draws a
+   line from Claude Code's JSON.
 
 It runs on every change to `claude-sandbox/`, and every Tuesday:
 `golang:1.27-trixie`, `node:24-trixie-slim`, and Debian's packages move under

@@ -30,9 +30,10 @@ None of them reaches the server.
 |---|---|---|---|
 | Claude Code | **2.1.310** | 2026-10-23 | `ARG CLAUDE_CODE_VERSION` in `claude-sandbox/Containerfile`. Exact, like the server's own stacks: what the agent can do changes only through an edit someone reads. The image never updates itself. |
 | egress | **v0.1.1** | 2026-10-27 | `ARG EGRESS_VERSION` in `claude-sandbox/Containerfile`: the proxy, HTTPS to public addresses and nothing else. Exact, like Claude Code: what the agent can reach changes only through an edit someone reads. Never v0.1.0: it is retracted, because a CONNECT to `[::%en0]:443` reached the machine itself. |
-| `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image, and the stage that builds egress. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
+| `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image, and the stages that build egress and statusline. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
 | `node` base image | **24-trixie-slim** | 24.22.1, 2026-10-20 | The install stage only: npm picks Claude Code's native binary for the platform. Nothing of Node reaches the sandbox. |
 | podman | not pinned | 6.1.4 | Homebrew's, on the Mac; the sandbox was verified with 6.1.4. It needs a rootless connection to the machine — `--userns keep-id` exists only there — and a machine that shares only `~/workspace`: 6.1.4's default shares all of `/Users`, and `~/.config/containers` read-write. |
+| statusline | **v0.3.1** | 2026-10-11 | `ARG STATUSLINE_VERSION` in `claude-sandbox/Containerfile`: the status line Claude Code shows in the sandbox, the same one as on the Mac. Exact, like egress. The image's `/etc/claude-code/managed-settings.json` names it. |
 
 ## Version policy
 
@@ -95,3 +96,6 @@ None of them reaches the server.
 - Base images: https://hub.docker.com/_/golang and https://hub.docker.com/_/node;
   Node's release dates: https://nodejs.org/dist/index.json
 - podman: `podman --version` on the Mac
+- statusline: https://github.com/andygeiss/statusline/tags, and
+  `go list -m -json github.com/andygeiss/statusline@latest`, which names the
+  version the Go module proxy serves and dates it (checked 2026-10-27)

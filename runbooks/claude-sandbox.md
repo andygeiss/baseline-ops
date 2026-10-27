@@ -62,6 +62,21 @@ and says which. To give the agent another skill, add its name to the list in
 [`claude-sandbox/claude-sandbox`](../claude-sandbox/claude-sandbox), then run
 `make claude-sandbox`.
 
+## The status line
+
+Claude Code in the sandbox shows the same status line as on the Mac:
+[statusline](https://github.com/andygeiss/statusline), built into the image.
+The image's `/etc/claude-code/managed-settings.json` points Claude Code at it.
+A setting in `~/.claude` would live in each directory's volume, which an image
+change never reaches.
+
+```text
+…/workspace/sandbox-status-check │ Sonnet 5.5 │ medium │ ⎇ main
+```
+
+The directory starts with `…`, not `~`: the agent's home is `/home/agent`, so
+statusline cannot shorten your path the way it does on the Mac.
+
 ## Install, once per Mac
 
 The podman machine is a Linux VM, and it must share only `~/workspace` with
@@ -163,15 +178,16 @@ own code, and changing it is an egress release. So the list is for reading.
 - **A port other than 443, or plain HTTP,** is a tool that asked for something
   egress does not carry. It carries HTTPS on port 443, and nothing else.
 
-## Upgrade Claude Code or egress
+## Upgrade Claude Code, egress, or statusline
 
-Bump `ARG CLAUDE_CODE_VERSION` or `ARG EGRESS_VERSION` in
+Bump `ARG CLAUDE_CODE_VERSION`, `ARG EGRESS_VERSION`, or
+`ARG STATUSLINE_VERSION` in
 [`claude-sandbox/Containerfile`](../claude-sandbox/Containerfile), and its row
 in [VERSIONS.md](../VERSIONS.md), then:
 
 ```sh
 make claude-sandbox                                       # the last line prints Claude Code's version
-claude-sandbox --shell -c 'egress -version'               # and this one egress's
+claude-sandbox --shell -c 'egress -version; statusline version'    # then egress's and statusline's
 podman --connection podman-machine-default image prune    # drops the image it replaced
 ```
 
