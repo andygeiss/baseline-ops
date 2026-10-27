@@ -53,7 +53,7 @@ make auto-reboot    # once per server: reboot at 04:00 when an update needs it
 make wg-exit        # once per server: let the house's WireGuard tunnel out to the internet
 make wg-house       # once, and again to change the key: the house gateway's WireGuard file
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
-make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory
+make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
 Seven targets, and none of them an application's. Two are the two sides of one
@@ -104,7 +104,7 @@ baseline-ops/
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
-│   ├── claude-sandbox.md       ← run Claude Code in a sandbox that sees one directory and reaches public HTTPS only
+│   ├── claude-sandbox.md       ← run Claude Code in a sandbox that sees one directory and two skills, and reaches public HTTPS only
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time

@@ -139,8 +139,8 @@ omlx-tunnel-stop:
 	rm -f '$(TUNNEL_PLIST)'
 
 # The sandbox Claude Code runs in on the Mac you work on: a rootless podman
-# container that sees one directory under ~/workspace, and reaches only public
-# HTTPS addresses, through egress
+# container that sees one directory under ~/workspace, plus two skills
+# read-only, and reaches only public HTTPS addresses, through egress
 # (runbooks/claude-sandbox.md). The files are copied, where `install` above
 # symlinks: an agent in the sandbox can write to this checkout, and a launcher
 # it could edit would let it out on the next start. So a change here reaches

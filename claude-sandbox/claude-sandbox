@@ -1,7 +1,8 @@
 #!/bin/sh
 # claude-sandbox — run Claude Code in a rootless podman container that sees the
-# directory it starts in and nothing else of the Mac. The directory must be
-# ~/workspace or inside it. runbooks/claude-sandbox.md is the manual.
+# directory it starts in, two skills read-only, and nothing else of the Mac.
+# The directory must be ~/workspace or inside it. runbooks/claude-sandbox.md is
+# the manual.
 #
 #   claude-sandbox [claude arguments]    claude-sandbox --continue, for one
 #   claude-sandbox --shell [bash args]   a shell in the same sandbox, to look around
@@ -101,6 +102,30 @@ fi
 name=$(printf %s "${here##*/}" | tr -c 'A-Za-z0-9_.-' -)
 vol=claude-sandbox-$name-$(printf %s "$here" | shasum -a 256 | cut -c 1-8)
 
+# The skills of the Claude Code you run on the Mac, each the checkout that the
+# Mac's ~/.claude/skills links to. They are read-only here: the Claude outside
+# the sandbox follows the same files, and an agent that could edit them could
+# steer that Claude. The machine shares only ~/workspace, so a skill must live
+# there.
+set -- "$image" "$cmd" "$@"
+for skill in engineering-baseline engineering-operations; do
+	dir=$(cd "$HOME/.claude/skills/$skill" 2> /dev/null && pwd -P) || {
+		printf 'claude-sandbox: no skill %s — run make install in its repository\n' "$skill" >&2
+		continue
+	}
+	case $dir/ in
+	"$root"/*) set -- --volume "$dir:/home/agent/.claude/skills/$skill:ro" "$@" ;;
+	*) printf 'claude-sandbox: skill %s is in %s — the podman machine shares only %s\n' "$skill" "$dir" "$root" >&2 ;;
+	esac
+done
+
+# Claude Code reads skills from ~/.claude/skills, in the home volume. podman
+# would make a mount point's missing folders there as root, and then Claude
+# could not write its own settings. So the agent makes them first.
+podman run --rm --network none --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+	--cap-drop all --security-opt no-new-privileges --read-only \
+	--volume "$vol:/home/agent" "$image" mkdir -p /home/agent/.claude/skills
+
 # A terminal on both ends is a session you type into: it gets a terminal and
 # your keys. Output into a pipe or a file gets neither: no terminal codes land
 # in it, and claude -p does not wait three seconds for keys nobody types.
@@ -113,7 +138,8 @@ fi
 
 # The directory is mounted at the same path as on the Mac, so the paths in
 # Claude's answers and in its per-project history are the Mac's paths.
-# --detach-keys "" hands ctrl-p back to Claude Code.
+# --detach-keys "" hands ctrl-p back to Claude Code. "$@" is the skills'
+# mounts, then the image and the command.
 podman run --rm --interactive="$interactive" --tty="$tty" --detach-keys "" --init \
 	--name "claude-sandbox-$$" --hostname claude-sandbox \
 	--network "$net" --dns none \
@@ -128,4 +154,4 @@ podman run --rm --interactive="$interactive" --tty="$tty" --detach-keys "" --ini
 	--env CLAUDE_CODE_OAUTH_TOKEN \
 	--env GIT_AUTHOR_NAME --env GIT_AUTHOR_EMAIL \
 	--env GIT_COMMITTER_NAME --env GIT_COMMITTER_EMAIL \
-	"$image" "$cmd" "$@"
+	"$@"

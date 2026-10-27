@@ -4,7 +4,8 @@
 
 `claude-sandbox` runs Claude Code in a rootless podman container on the Mac you
 work on. The agent sees the directory you start it in — `~/workspace` or one
-below it — and nothing else of the Mac. It reaches the internet only through
+below it — and two skills, read-only. It sees nothing else of the Mac. It
+reaches the internet only through
 [egress](https://github.com/andygeiss/egress), a proxy that lets through HTTPS
 to public addresses and nothing else: not the Mac, and not your LAN.
 
@@ -20,8 +21,9 @@ claude-sandbox --shell                          # a shell in the same sandbox, t
 
 | Reaches | Does not reach |
 |---|---|
-| The directory it started in, read and write, at the same path as on the Mac. What it changes there are your files. | The rest of the Mac: your home, `~/.ssh`, the keychain, the other projects, and the `~/.claude` of the Claude Code you run outside the sandbox. |
+| The directory it started in, read and write, at the same path as on the Mac. What it changes there are your files. | The rest of the Mac: your home, `~/.ssh`, the keychain, every other project but the two skills, and the `~/.claude` of the Claude Code you run outside the sandbox. |
 | A home of its own: one podman volume per directory, holding Claude's settings and sessions, and Go's caches. | Another directory's volume, so the sessions of one project never show up in another. |
+| The skills `engineering-baseline` and `engineering-operations`, read-only. | A write to either skill: the Claude Code outside the sandbox follows them too. |
 | Any public HTTPS site, through the proxy: what `curl` and WebFetch fetch. WebSearch too, which runs on Anthropic's side. | A private address, whatever name points at it: the Mac's own services, your LAN, the podman machine. Plain HTTP, ports other than 443, and DNS. |
 | | Root, a Linux capability, or a write outside its home, the directory, and `/tmp`. |
 | | claude.ai connectors, which reach your mail and your files, or publishing pages to claude.ai. The image turns both off. |
@@ -43,6 +45,20 @@ agent ──(network claude-sandbox: no gateway, no DNS)──▶ proxy ──(p
   through when the address it connects to is public. It checks that address
   after DNS, so a name that points into your LAN is refused like the address
   itself. It stops when the session ends.
+
+## The skills it reads
+
+The agent gets two skills of the Claude Code you run on the Mac,
+`engineering-baseline` and `engineering-operations`, in `~/.claude/skills`.
+Each is the checkout that the Mac's `~/.claude/skills/<name>` links to, so
+`make install` in that repository is what puts it there. Both are read-only:
+the Claude outside the sandbox follows the same files, and an agent that could
+edit them could steer that Claude.
+
+The launcher leaves out a skill it cannot find, or one outside `~/workspace`,
+and says which. To give the agent another skill, add its name to the list in
+[`claude-sandbox/claude-sandbox`](../claude-sandbox/claude-sandbox), then run
+`make claude-sandbox`.
 
 ## Install, once per Mac
 
@@ -117,6 +133,9 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 
 ```sh
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
+claude-sandbox --shell -c 'ls ~/.claude/skills'    # engineering-baseline  engineering-operations
+claude-sandbox --shell -c 'touch ~/.claude/skills/engineering-baseline/x'    # Read-only file system
+claude-sandbox -p --output-format stream-json --verbose hi | jq -c 'select(.subtype == "init") | .skills | map(select(startswith("engineering-")))'    # both skills: Claude found them
 claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://example.com/'    # 200: a public site answered
 claude-sandbox --shell -c 'curl -sS https://192.168.1.1/'    # CONNECT tunnel failed, response 403
 claude-sandbox --shell -c 'curl -sS https://host.containers.internal/'    # the same 403: that name is the Mac
@@ -196,7 +215,8 @@ security delete-generic-password -s claude-sandbox
 - **Started in `~/workspace` itself, the agent reaches every project.** That
   includes `baseline/` and `baseline-ops/`: the skills of the Claude Code you
   run outside the sandbox, and this launcher's source. Start it in the project
-  instead.
+  instead. Started in `baseline/` or `baseline-ops/`, it can change that one
+  skill: the skill's mount is read-only, but the project's is not.
 - **The podman machine shares all of `~/workspace`.** The container shows the
   agent one directory, but the Linux VM it runs in sees every project. An
   agent that broke out of the container, through a bug in podman or in the
