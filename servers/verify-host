@@ -68,11 +68,9 @@ check "unattended-upgrades runs daily" sh -c 'apt-config dump | grep -qx "APT::P
 check "auto-reboot at 04:00" sh -c 'apt-config dump | grep -qx "Unattended-Upgrade::Automatic-Reboot \"true\";" &&
 	apt-config dump | grep -qx "Unattended-Upgrade::Automatic-Reboot-Time \"04:00\";"'
 
-# How you find out, and the server's own state off the box.
+# How you find out.
 check "health-check timer active" systemctl is-active health-check.timer
-check "backup timer active" systemctl is-active backup.timer
-check "health-check.url and backup.env are 0400 root" sh -c '
-	[ "$(stat -c "%a %U" /etc/health-check.url)" = "400 root" ] &&
-	[ "$(stat -c "%a %U" /etc/backup.env)" = "400 root" ]'
+check "health-check.url is 0400 root" \
+	sh -c '[ "$(stat -c "%a %U" /etc/health-check.url)" = "400 root" ]'
 
 [ "$failures" -eq 0 ] || { echo "$failures failed"; exit 1; }

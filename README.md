@@ -54,9 +54,9 @@ make auto-reboot    # once per server: reboot at 04:00 when an update needs it
 make wg-exit        # once per server: let the house's WireGuard tunnel out to the internet
 make wg-house       # once, and again to change the key: the house gateway's WireGuard file
 make health-check   # once per server: every five minutes, tell a dead man's switch whether the server is healthy
-make backup         # once per server: nightly, the server's own state off the box, with restic
 make verify-host    # any time: check the server against servers/vserver.md; changes nothing
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
+make backup         # on the Mac you work on, any time: the server's own state, copied onto the Mac
 make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
@@ -75,6 +75,9 @@ document, "Updates and the nightly reboot". The last two carry the house's own
 traffic out to the internet, over a WireGuard tunnel the house's gateway opens:
 `wg-exit` sets up the server's side, and `wg-house` gives the gateway its key —
 same document, "The house's way out".
+
+`backup` reads the server but keeps what it reads on the Mac you work on.
+That copy is the backup; nothing in the cloud holds one.
 
 The seventh sets up the Mac you work on, not a server: `make claude-sandbox`
 installs the sandbox Claude Code runs in there
@@ -106,7 +109,7 @@ baseline-ops/
 │   ├── claude-sandbox          ← the launcher: one session, two containers
 │   └── Containerfile           ← the image both containers run: Claude Code, egress as the proxy, and statusline
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make claude-sandbox (the Mac you work on)
+├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make backup + make claude-sandbox (the Mac you work on)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
@@ -119,7 +122,7 @@ baseline-ops/
 │   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
-│   ├── backup                  ← the server's own state off the box, with restic; make backup ships it, with its units
+│   ├── backup                  ← the server's own state as one tar.gz; make backup runs it and keeps it on the Mac
 │   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
 │   ├── health-check            ← every five minutes, ping a dead man's switch; make health-check ships it, with its units
 │   ├── verify-host             ← the server checked against vserver.md; make verify-host runs it

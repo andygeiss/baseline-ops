@@ -18,7 +18,6 @@ code rather than the server.
 | `golang` base image | **1.27-alpine** | 1.27.3, 2026-10-19 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
 | Litestream image | **0.5** | 0.5.17, 2026-08-31 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
 | Portainer CE | **2.45.2** | 2026-10-08 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. The next LTS, 3.3, is planned for December 2026: a new major. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
-| restic | not pinned | Ubuntu 26.04's package | On the server only: the nightly copy of the server's own state — [runbooks/restore.md](runbooks/restore.md). From Ubuntu's archive, so unattended-upgrades moves it, not an edit here. |
 | wireguard-tools | **1.0.20250521** | 2025-05-21 | On the server only: the `wg` command, for the house's tunnel — [servers/vserver.md](servers/vserver.md), "The house's way out". Ubuntu 26.04's own package, `-1ubuntu1`, so unattended-upgrades moves it, not an edit here. |
 
 ## The agent sandbox on the Mac you work on

@@ -12,9 +12,9 @@ in order:
 
 1. Push, and watch `checks.yml` pass. shellcheck has never run on these
    scripts, so expect a few findings.
-2. Pick the monitoring service and the storage provider, then follow
-   runbooks/restore.md, "Set it up, once per server". It ends with `make
-   health-check backup verify-host`.
+2. Pick the monitoring service, write its ping URL to the server
+   (servers/vserver.md, "How you find out"), and run `make health-check
+   verify-host`. Then run `make backup` on the Mac.
 3. Run each phase's "Done when". A phase is done only after that.
 
 Each phase below can be shipped on its own and ends in something you can check.
@@ -52,7 +52,6 @@ Checks for the timer to run, each one pinging only on success:
 - [ ] the iptables rules from `conn-limits` and `wg-exit` present
 - [ ] `/var/run/reboot-required` older than two days, which means the
       automatic reboot is not happening
-- [ ] the backups' own pings from phase 2, on their own checks
 
 Deliverables:
 
@@ -98,20 +97,14 @@ Two separate things are at risk.
 | Portainer's admin user and settings | volume `portainer_data` | set up again |
 | certificates and the ACME account | volume `caddy_data` | Caddy fetches them again; rate limits if many at once |
 
-- [x] `servers/backup`: restic, encrypted, to S3-compatible storage, nightly
-      from a systemd timer, covering the table above. It pings phase 1's
-      switch on success. `make backup` ships it, the way `conn-limits` is
-      shipped
-- [ ] The restic password and the bucket credentials live on the server, `0400`,
-      **and** somewhere off it that you can reach with the server gone, such as
-      a password manager. A backup whose key dies with the server is not a
-      backup
-- [ ] `runbooks/restore.md`, a new section, "Get the server's own state back",
-      rehearsed once into a scratch directory
-
-**Decide first:** the storage provider, and whether the Litestream replicas
-share its bucket. Recommendation: one provider, two buckets, two keys, so that
-a leaked application key cannot delete the host backup.
+- [x] `servers/backup`: one tar.gz of the table above, written to stdout.
+      `make backup` runs it on the Mac, over ssh, and keeps the newest 30 in
+      `~/Backups/vserver`. No cloud storage, no timer, nothing installed on
+      the server: the Mac holds the backup, and you run it as often as you like
+- [ ] FileVault on the Mac, and on Time Machine's disk: the archive holds every
+      secret, unencrypted
+- [ ] `runbooks/restore.md`, "Get the server's own state back", rehearsed once
+      into a scratch directory
 
 **Done when:** both restores have run once from the real backup, and the
 runbook says when.

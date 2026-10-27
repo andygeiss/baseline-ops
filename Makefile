@@ -2,8 +2,8 @@
 # wire it into the current user's Claude Code as a personal skill, and the
 # rest set up or check a machine rather than build anything: `sshd-hardening`,
 # `sshd-tunnel`, `conn-limits`, `auto-reboot`, `wg-exit`, `wg-house`,
-# `health-check`, `backup` and `verify-host` on the server,
-# `omlx-tunnel` on the house machine, `claude-sandbox` on the Mac you work on —
+# `health-check` and `verify-host` on the server, `omlx-tunnel` on the house
+# machine, `backup` and `claude-sandbox` on the Mac you work on —
 # each a line that must be typed exactly, so it is not typed. `install` is the
 # first target: a bare `make` installs.
 
@@ -128,20 +128,25 @@ health-check:
 	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/health-check && test -s /etc/health-check.url || { echo "write the ping URL to /etc/health-check.url, mode 0400, first" >&2; exit 1; }'
 	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now health-check.timer && systemctl start health-check.service && journalctl -u health-check.service -n 10 --no-pager && systemctl list-timers health-check.timer'
 
-# The server's own state, off the box, nightly with restic (runbooks/restore.md,
-# "Get the server's own state back"). restic comes from Ubuntu's archive, so
-# unattended-upgrades patches it. /etc/backup.env, mode 0400, is written by
-# hand, and so is the one `restic init` (both in the runbook). This target
-# refuses to start the timer without them. Runs twice safely: the script and
-# units are rewritten, and the last line runs one backup and prints the
-# snapshots restic has.
+# The server's own state, onto this Mac, as one dated tar.gz in $(BACKUP_DIR)
+# (runbooks/restore.md, "Get the server's own state back"). The script runs on
+# the server from stdin, as wg-house does, and installs nothing there. Run it
+# as often as you like. The archive holds every secret on the server, so the
+# directory and each file are yours alone. It lands as .part and is renamed
+# only once tar can read all of it and it holds the site files, so a cut
+# connection never leaves a file that looks whole. The newest $(BACKUP_KEEP)
+# are kept.
+BACKUP_DIR  = $(HOME)/Backups/vserver
+BACKUP_KEEP = 30
+
 backup:
 	sh -n servers/backup
-	ssh $(ROOT) 'NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=300 restic'
-	scp servers/backup $(ROOT):/usr/local/sbin/backup
-	scp servers/backup.service servers/backup.timer $(ROOT):/etc/systemd/system/
-	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/backup && test -s /etc/backup.env || { echo "write /etc/backup.env, mode 0400, first — runbooks/restore.md" >&2; exit 1; }'
-	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now backup.timer && systemctl start backup.service && set -a && . /etc/backup.env && restic snapshots --latest 1'
+	mkdir -p '$(BACKUP_DIR)' && chmod 0700 '$(BACKUP_DIR)'
+	umask 077 && f='$(BACKUP_DIR)'/vserver-$$(date -u +%Y%m%dT%H%M%SZ).tgz && \
+		{ ssh $(ROOT) sh -s < servers/backup > "$$f.part" && \
+		  tar -tzf "$$f.part" | grep -q '^opt/caddy/sites/' && \
+		  mv "$$f.part" "$$f" && ls -l "$$f"; } || { rm -f "$$f.part"; exit 1; }
+	ls -1t '$(BACKUP_DIR)'/vserver-*.tgz | tail -n +$$(($(BACKUP_KEEP) + 1)) | xargs rm -f --
 
 # Checks the server against servers/vserver.md and changes nothing: every
 # claim the document makes that a command can answer, one line each, ok or

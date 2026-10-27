@@ -1,6 +1,6 @@
 # Runbook: Backups and getting the data back
 
-**Last verified: 2026-08-15.** "Get the server's own state back" added 2026-10-27, not yet run.
+**Last verified: 2026-08-15.** "Get the server's own state back" changed 2026-10-27, not yet run.
 
 The database is one file in a volume on one machine, and so is every snapshot
 written beside it. This runbook covers the two things that follow from that:
@@ -96,9 +96,10 @@ before it belongs in a cron line nobody remembers.
 
 ## Get the server's own state back
 
-Some files are true of this machine only, so no repository holds them.
-`servers/backup` copies them off the box every night, with restic, encrypted,
-to S3-compatible storage:
+Some files are true of this machine only, so no repository holds them. `make
+backup`, run on your Mac, copies them there as one dated archive in
+`~/Backups/vserver/`. Run it as often as you like. The newest 30 are kept, and
+nothing is installed on the server for it.
 
 | What | Where | Lost means |
 |---|---|---|
@@ -111,59 +112,40 @@ to S3-compatible storage:
 The applications' databases are not in it. They are the first half of this
 runbook: Litestream, or the application's own answer.
 
-### Set it up, once per server
+**The archive holds every secret on the server, unencrypted.** The directory
+and each file are mode `0700` and `0600`. The Mac's disk MUST be encrypted
+(FileVault), and so MUST the disk Time Machine copies it to.
 
-Use a bucket of its own and a key of its own. The Litestream replicas get
-another bucket and another key, so a leaked application key cannot delete the
-host backup.
-
-1. Make two checks on the monitoring service, one for the health check and one
-   for the backup (servers/vserver.md, "How you find out"). Write the first
-   URL to the server:
-
-   ```sh
-   ssh root@vserver 'umask 077 && cat > /etc/health-check.url'   # paste the URL, then ctrl-d
-   ```
-
-2. Write `/etc/backup.env`. The format is in `servers/backup`'s header. Make
-   the password long and random, and **save it in your password manager
-   too**. Without it, the backup cannot be read.
-
-   ```sh
-   ssh root@vserver 'umask 077 && cat > /etc/backup.env'   # paste, then ctrl-d
-   ```
-
-3. Make the repository, once:
-
-   ```sh
-   ssh root@vserver 'apt-get install -y restic && set -a && . /etc/backup.env && restic init'
-   ```
-
-4. Install both timers, and check them:
-
-   ```sh
-   make health-check backup
-   make verify-host
-   ```
+```sh
+make backup    # on the Mac; prints the archive it kept
+```
 
 ### Rehearse it
 
-Restore the latest snapshot into a scratch directory, never over `/`, and
-look at it. Check that the site files name your domains and that a secret is
-the right size, not empty:
+Unpack the newest archive into a scratch directory on the Mac and look at it.
+Check that the site files name your domains and that a secret is the right
+size, not empty:
 
 ```sh
-ssh root@vserver 'set -a && . /etc/backup.env && restic restore latest --target /root/restore-check'
-ssh root@vserver 'ls -R /root/restore-check/opt/caddy/sites && rm -rf /root/restore-check'
+f=$(ls -1t ~/Backups/vserver/vserver-*.tgz | head -n 1)
+mkdir /tmp/restore-check && tar -xzf "$f" -C /tmp/restore-check
+ls -lR /tmp/restore-check/opt/caddy/sites /tmp/restore-check/opt/*/secrets
+rm -rf /tmp/restore-check
 ```
 
 Write down the date here when you have. **Not rehearsed yet.**
 
 ### Restore for real
 
-On a server that lost its disk: rebuild it far enough to run Docker and
-restic, then write `/etc/backup.env` again from your password manager and the
-storage provider's console. Restore into a scratch directory as in the
-rehearsal, then copy back what you need, with the owners and modes the table
-in servers/vserver.md, "Directory layout", names. Stop a stack before you put
-back its volume.
+On a server that lost its disk: rebuild it far enough to run Docker. Copy the
+archive over and unpack it into a scratch directory, never over `/`:
+
+```sh
+scp ~/Backups/vserver/vserver-<date>.tgz root@vserver:/root/
+ssh root@vserver 'mkdir /root/restore && tar -xzf /root/vserver-<date>.tgz -C /root/restore'
+```
+
+Then copy back what you need. tar run as root keeps the owners and modes, and
+servers/vserver.md, "Directory layout", says what they should be. Stop a stack
+before you put back its volume. Delete `/root/restore` and the archive when you
+are done: they hold every secret.
