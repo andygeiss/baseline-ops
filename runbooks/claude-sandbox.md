@@ -1,6 +1,6 @@
 # Runbook: Claude Code sandbox
 
-**Last verified: 2026-10-25**
+**Last verified: 2026-10-27**
 
 `claude-sandbox` runs Claude Code in a rootless podman container on the Mac you
 work on. The agent sees the directory you start it in — `~/workspace` or one
@@ -21,7 +21,7 @@ claude-sandbox --shell                          # a shell in the same sandbox, t
 | Reaches | Does not reach |
 |---|---|
 | The directory it started in, read and write, at the same path as on the Mac. What it changes there are your files. | The rest of the Mac: your home, `~/.ssh`, the keychain, the other projects, and the `~/.claude` of the Claude Code you run outside the sandbox. |
-| A home of its own: one podman volume per directory, holding Claude's sign-in, settings and sessions, and Go's caches. | Another directory's volume, so the sessions of one project never show up in another. |
+| A home of its own: one podman volume per directory, holding Claude's settings and sessions, and Go's caches. | Another directory's volume, so the sessions of one project never show up in another. |
 | The hosts in `allowlist`, over HTTPS, through the proxy. | Any other host, DNS, the Mac's own services on `localhost`, or your LAN. |
 | | Root, a Linux capability, or a write outside its home, the directory, and `/tmp`. |
 | | claude.ai connectors, which reach your mail and your files, or publishing pages to claude.ai. The image turns both off. |
@@ -89,25 +89,26 @@ it could edit would let it out on its next start. So a change in
 `claude-sandbox/` reaches the sandbox only through `make claude-sandbox`, and
 you read the diff first.
 
-## Sign in
+## Sign in, once per Mac
 
-The first start in a directory asks you to sign in. Pick one of two ways.
-
-**`/login`, once per directory.** Claude Code prints a link. Open it on the
-Mac, sign in, and paste the code the page shows back into the terminal. The
-sign-in stays in that directory's volume.
-
-**A token, once for every directory.** It needs a Claude subscription. On the
-Mac, outside the sandbox:
+The sandbox signs in with a token. Claude Code does not start without one.
+Making the token needs a Claude subscription. On the Mac, outside the sandbox:
 
 ```sh
-claude setup-token                                              # prints a token that lasts a year
-security add-generic-password -a "$USER" -s claude-sandbox -w   # paste it at the prompt
+claude setup-token                                                 # prints a token that lasts a year
+security add-generic-password -U -a "$USER" -s claude-sandbox -w   # paste it at the prompt
 ```
 
 The launcher reads the token from the keychain at every start and gives it to
-the agent as `CLAUDE_CODE_OAUTH_TOKEN`. `security delete-generic-password -s
-claude-sandbox` takes it away again.
+the agent as `CLAUDE_CODE_OAUTH_TOKEN`. With no token, it stops and prints
+these two commands. Only `claude-sandbox --shell` starts without one.
+
+A token, not `/login`: a `/login` sign-in would live in one directory's volume,
+so every new directory would ask again. And `claude-sandbox -p` cannot answer
+a sign-in prompt at all.
+
+The token lasts a year. When it runs out, run both commands again: `-U`
+replaces the old token in the keychain.
 
 ## Check that it holds
 
@@ -160,8 +161,8 @@ build the same broken image.
 
 ## Start a directory over, or remove the sandbox
 
-A directory's volume holds its sign-in, settings and sessions. Remove the
-volume, and the next start in that directory begins from nothing:
+A directory's volume holds its settings and sessions. Remove the volume, and
+the next start in that directory begins from nothing:
 
 ```sh
 podman --connection podman-machine-default volume ls --filter name=claude-sandbox
@@ -175,6 +176,7 @@ rm ~/.local/bin/claude-sandbox
 rm -r ~/.local/share/claude-sandbox
 podman --connection podman-machine-default rmi localhost/claude-sandbox:2.1.310
 podman --connection podman-machine-default network rm claude-sandbox
+security delete-generic-password -s claude-sandbox
 ```
 
 ## What the sandbox does not stop
@@ -198,6 +200,5 @@ podman --connection podman-machine-default network rm claude-sandbox
   proxy fetches any module path it is asked for, so a request can carry data
   to a server someone else runs. The allowlist makes a leak smaller. It does
   not make one impossible.
-- **The agent can read its own sign-in.** The token is in its environment, and
-  a `/login` sign-in is in its home. It can send either only to the hosts
-  above.
+- **The agent can read its own sign-in.** The token is in its environment. It
+  can send it only to the hosts above.

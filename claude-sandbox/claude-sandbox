@@ -44,6 +44,19 @@ if [ "${1:-}" = --shell ]; then
 	cmd=bash
 fi
 
+# The sign-in is a token from `claude setup-token`, kept in the login keychain.
+# Claude does not start without one. A /login sign-in would live in one
+# directory's volume, so each new directory would ask again, and claude -p
+# cannot answer. A shell starts without a token.
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] &&
+	token=$(security find-generic-password -s claude-sandbox -w 2> /dev/null); then
+	export CLAUDE_CODE_OAUTH_TOKEN="$token"
+fi
+[ "$cmd" = bash ] || [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] ||
+	die 'there is no sign-in token — make one on the Mac:
+  claude setup-token
+  security add-generic-password -U -a "$USER" -s claude-sandbox -w   # paste the token at the prompt'
+
 # Internal means no gateway: the only thing the agent reaches on this network
 # is the proxy. No DNS either, so it cannot carry data out in name lookups.
 podman network exists "$net" ||
@@ -73,13 +86,6 @@ trap 'exit 1' HUP INT TERM
 ip=$(podman inspect --format "{{(index .NetworkSettings.Networks \"$net\").IPAddress}}" "$proxy")
 url=http://$ip:8888
 
-# Sign-in without a browser: a token from `claude setup-token`, kept in the
-# login keychain. Without one, each directory signs in once, with /login.
-if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] &&
-	token=$(security find-generic-password -s claude-sandbox -w 2> /dev/null); then
-	export CLAUDE_CODE_OAUTH_TOKEN="$token"
-fi
-
 # Your git identity, so the agent's commits are yours, and it has no reason to
 # write one into the project's .git/config.
 if name=$(git config user.name) && email=$(git config user.email); then
@@ -87,9 +93,9 @@ if name=$(git config user.name) && email=$(git config user.email); then
 		GIT_COMMITTER_NAME="$name" GIT_COMMITTER_EMAIL="$email"
 fi
 
-# The agent's home is a volume per directory: Claude's sign-in, settings and
-# sessions, and Go's caches, from one project never show up in another. The
-# hash tells apart two directories with the same name.
+# The agent's home is a volume per directory: Claude's settings and sessions,
+# and Go's caches, from one project never show up in another. The hash tells
+# apart two directories with the same name.
 name=$(printf %s "${here##*/}" | tr -c 'A-Za-z0-9_.-' -)
 vol=claude-sandbox-$name-$(printf %s "$here" | shasum -a 256 | cut -c 1-8)
 
