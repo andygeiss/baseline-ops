@@ -56,7 +56,7 @@ make wg-house       # once, and again to change the key: the house gateway's Wir
 make health-check   # once per server: every five minutes, tell a dead man's switch whether the server is healthy
 make verify-host    # any time: check the server against servers/vserver.md; changes nothing
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
-make backup         # on the Mac you work on, any time: the server's own state, copied onto the Mac
+make backup         # on the Mac you work on, any time: the server's own state and the apps' data, copied onto the Mac
 make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
@@ -81,10 +81,11 @@ counted, so a new one cannot make the list wrong:
   house's way out".
 - `health-check` and `verify-host` say whether the server is well and whether
   it matches its document — same document, "How you find out".
-- `backup` reads the server but keeps what it reads on the Mac you work on.
-  That copy is the backup; nothing in the cloud holds one.
-  [runbooks/restore.md](runbooks/restore.md), "Get the server's own state
-  back", is the way back.
+- `backup` reads the server, the applications' data included, but keeps what
+  it reads on the Mac you work on. That copy is the backup; nothing in the
+  cloud holds one. [runbooks/restore.md](runbooks/restore.md), "Get the
+  server's own state back" and "Get an application's data back", is the way
+  back.
 - `claude-sandbox` sets up the Mac you work on, not a server: it installs the
   sandbox Claude Code runs in there
   ([runbooks/claude-sandbox.md](runbooks/claude-sandbox.md)). Unlike `make
@@ -128,7 +129,7 @@ baseline-ops/
 │   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
-│   ├── backup                  ← the server's own state as one tar.gz; make backup runs it and keeps it on the Mac
+│   ├── backup                  ← the server's own state and the apps' data as one tar.gz; make backup keeps it on the Mac
 │   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
 │   ├── health-check            ← every five minutes, ping a dead man's switch; make health-check ships it, with its units
 │   ├── verify-host             ← the server checked against vserver.md; make verify-host runs it

@@ -1,12 +1,9 @@
 #!/bin/sh
-# Writes the server's own state to stdout, as one tar.gz: the files no
-# repository holds, because they are true of this machine only. `make backup`
-# in this repository runs it over ssh, as root, from stdin, so it never lands
-# on the server, and keeps the archive on your Mac. runbooks/restore.md, "Get
-# the server's own state back", is the way back.
-#
-# The application's data is not here. A database is copied by Litestream, or
-# by the application's own snapshot, and runbooks/restore.md covers both.
+# Writes the server's own state, and every application's data, to stdout, as
+# one tar.gz. `make backup` in this repository runs it over ssh, as root, from
+# stdin, so it never lands on the server, and keeps the archive on your Mac.
+# runbooks/restore.md, "Get the server's own state back" and "Get an
+# application's data back", is the way back.
 set -u
 
 cd / || exit 1
@@ -14,10 +11,37 @@ cd / || exit 1
 # What each one is, and what losing it costs: runbooks/restore.md, "Get the
 # server's own state back". /opt holds every server-owned file — site files,
 # secrets, site.env, litestream.yml, each .env — but not what a deploy writes
-# again, and not the snapshots, which are the application's data. Portainer is
+# again, and not the snapshots, which the data below replaces. Portainer is
 # optional, so its volume is taken only when it is there.
 set -- opt etc/systemd/network var/lib/docker/volumes/caddy_caddy_data
 [ -d var/lib/docker/volumes/portainer_data ] && set -- "$@" var/lib/docker/volumes/portainer_data
+
+# Each application's data, copied cold, as a deploy's snapshot is: stopped, so
+# the database and its WAL are one consistent state. An application is what
+# bin/deploy has deployed, so it has a deploy.lock, and its volume is
+# <app>_data. Holding the lock means no deploy starts mid-copy, and the health
+# check skips the application for the seconds it is down. The copies wait in
+# a directory of their own and go into the archive as data/<app>/.
+data=$(mktemp -d /root/backup.XXXXXX) || exit 1
+trap 'rm -rf "$data"' EXIT
+apps_failed=0
+for dir in /opt/*/; do
+	app=$(basename "$dir")
+	[ -f "$dir/deploy.lock" ] || continue
+	volume=$(docker volume inspect -f '{{.Mountpoint}}' "${app}_data" 2> /dev/null) || continue
+	flock -w 120 "$dir/deploy.lock" sh -c '
+		cd "$1" || exit 1
+		running=$(docker compose ps --status running -q app) || exit 1
+		[ -z "$running" ] || docker compose stop app > /dev/null 2>&1 || exit 1
+		mkdir "$3" && cp -a "$2/." "$3/"
+		status=$?
+		[ -z "$running" ] || docker compose start app > /dev/null 2>&1 || status=1
+		exit "$status"' sh "$dir" "$volume" "$data/$app" || {
+		echo "backup: could not copy $app's data" >&2
+		apps_failed=1
+	}
+done
+[ "$apps_failed" -eq 0 ] || exit 1
 
 # Portainer's database is one bolt file, and a copy taken while it writes may
 # not open. It is stopped for the seconds the copy takes. Every other volume
@@ -31,7 +55,7 @@ fi
 tar -czf - --one-file-system \
 	--exclude='opt/*/src' --exclude='opt/*/src.old' --exclude='opt/*/src.new' \
 	--exclude='opt/*/incoming' --exclude='opt/*/snapshots' --exclude='opt/containerd' \
-	"$@"
+	"$@" --transform="s,^${data#/},data," "${data#/}"
 status=$?
 
 [ "$portainer_was_running" = false ] || docker start portainer-portainer-1 > /dev/null

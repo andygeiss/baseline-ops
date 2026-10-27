@@ -128,8 +128,10 @@ health-check:
 	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/health-check && test -s /etc/health-check.url || { echo "write the ping URL to /etc/health-check.url, mode 0400, first" >&2; exit 1; }'
 	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now health-check.timer && systemctl start health-check.service && journalctl -u health-check.service -n 10 --no-pager && systemctl list-timers health-check.timer'
 
-# The server's own state, onto this Mac, as one dated tar.gz in $(BACKUP_DIR)
-# (runbooks/restore.md, "Get the server's own state back"). The script runs on
+# The server's own state and each application's data, onto this Mac, as one
+# dated tar.gz in $(BACKUP_DIR) (runbooks/restore.md, "Get the server's own
+# state back" and "Get an application's data back"). Each application stops
+# for the seconds its copy takes. The script runs on
 # the server from stdin, as wg-house does, and installs nothing there. Run it
 # as often as you like. The archive holds every secret on the server, so the
 # directory and each file are yours alone. It lands as .part and is renamed

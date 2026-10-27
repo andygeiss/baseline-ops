@@ -86,6 +86,12 @@ Two separate things are at risk.
 - [ ] Rehearse a restore from the replica, following runbooks/restore.md, and
       update its "Last verified"
 
+- [x] `make backup` copies each application's data volume, cold, onto the Mac,
+      so a lost server costs at most what was written since the last run.
+      Litestream stays the answer for an application that needs seconds
+- [ ] Rehearse `runbooks/restore.md`, "Get an application's data back", for
+      `game`
+
 **The server's own state**, which is in no repository by design:
 
 | What | Where | Lost means |

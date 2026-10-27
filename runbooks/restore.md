@@ -9,7 +9,9 @@ replicating the file off the box, and putting it back.
 **The decision is the application's, not this repository's.** The baseline's
 `patterns/go-sqlite.md` asks it: *if this server disappears right now, what have
 you lost?* — with three legitimate answers ("nothing that matters", "up to a
-day", "seconds"). What follows is how the server implements the third one.
+day", "seconds"). Litestream, below, is how the server implements the third
+one. `make backup` gives every application the second, for as long ago as you
+last ran it — "Get an application's data back", at the end.
 
 ## Add the Litestream sidecar
 
@@ -108,9 +110,13 @@ nothing is installed on the server for it.
 | wg0's key, and the house's peer | `/etc/systemd/network/` | the house set up again: `make wg-house` |
 | Portainer's admin user and settings | volume `portainer_data` | Portainer set up again |
 | certificates and the ACME account | volume `caddy_caddy_data` | Caddy asks for them again, and many at once meets Let's Encrypt's rate limits |
+| each application's data | volume `<app>_data`, as `data/<app>/` | the users' data, since the last `make backup` |
 
-The applications' databases are not in it. They are the first half of this
-runbook: Litestream, or the application's own answer.
+An application's data is copied cold, as a deploy's snapshot is: the
+application stops for the seconds the copy takes, and starts again. An
+application is what `bin/deploy` has deployed — it has a `deploy.lock`, which
+the backup holds while it copies, so no deploy starts halfway and the health
+check does not count the stop.
 
 **The archive holds every secret on the server, unencrypted.** The directory
 and each file are mode `0700` and `0600`. The Mac's disk MUST be encrypted
@@ -152,3 +158,43 @@ Then copy back what you need. tar run as root keeps the owners and modes, and
 servers/vserver.md, "Directory layout", says what they should be. Stop a stack
 before you put back its volume. Delete `/root/restore` and the archive when you
 are done: they hold every secret.
+
+## Get an application's data back
+
+`make backup` keeps each application's volume as `data/<app>/` in the archive:
+the database, its WAL, and whatever else the application wrote there.
+
+### Rehearse it
+
+On the Mac, with the sqlite3 that ships with macOS. The check is the
+database's own:
+
+```sh
+f=$(ls -1t ~/Backups/vserver/vserver-*.tgz | head -n 1)
+mkdir /tmp/restore-check && tar -xzf "$f" -C /tmp/restore-check data
+ls -l /tmp/restore-check/data/*
+sqlite3 /tmp/restore-check/data/<app>/app.db 'PRAGMA integrity_check'   # ok
+rm -rf /tmp/restore-check
+```
+
+Then look at a row you know is there. Write down the date here when you have.
+**Not rehearsed yet.**
+
+### Restore for real
+
+It throws away everything written since the backup, so it is a decision, as
+putting a deploy's snapshot back is. Into a scratch directory first, never
+straight into the volume:
+
+```sh
+scp ~/Backups/vserver/vserver-<date>.tgz root@vserver:/root/
+ssh root@vserver 'mkdir /root/restore && tar -xzf /root/vserver-<date>.tgz -C /root/restore data/<app>'
+ssh root@vserver 'cd /opt/<app> && docker compose stop app \
+    && docker run --rm --pull never -v <app>_data:/data -v /root/restore/data/<app>:/in:ro alpine:3.24 \
+       sh -c "find /data -mindepth 1 -delete && cp -a /in/. /data/" \
+    && docker compose start app'
+ssh root@vserver 'rm -rf /root/restore /root/vserver-<date>.tgz'
+```
+
+`cp -a` keeps the owner, 10001, that tar kept. Then check `/healthz` and a row
+you know is there, as after any restore.
