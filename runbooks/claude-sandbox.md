@@ -119,7 +119,7 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
 claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://api.anthropic.com/'    # 404: the API answered
 claude-sandbox --shell -c 'curl -sS https://example.com/'    # CONNECT tunnel failed, response 403
-claude-sandbox -p --output-format stream-json --verbose hi < /dev/null | jq 'select(.subtype == "init") | .tools | index("WebSearch")'    # null: no WebSearch
+claude-sandbox -p --output-format stream-json --verbose hi | jq 'select(.subtype == "init") | .tools | index("WebSearch")'    # null: no WebSearch
 ```
 
 The third one ends with the launcher naming the host it refused:
@@ -128,10 +128,6 @@ The third one ends with the launcher naming the host it refused:
 claude-sandbox: the proxy refused these hosts (claude-sandbox/allowlist in baseline-ops lets one in):
    1 example.com
 ```
-
-The fourth reads from `/dev/null`, so the launcher starts it without a
-terminal. With a terminal, Claude ends its output with a cursor code that jq
-cannot read.
 
 ## Let the agent reach another host
 

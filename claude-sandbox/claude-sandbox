@@ -107,13 +107,20 @@ fi
 name=$(printf %s "${here##*/}" | tr -c 'A-Za-z0-9_.-' -)
 vol=claude-sandbox-$name-$(printf %s "$here" | shasum -a 256 | cut -c 1-8)
 
+# A terminal on both ends is a session you type into: it gets a terminal and
+# your keys. Output into a pipe or a file gets neither: no terminal codes land
+# in it, and claude -p does not wait three seconds for keys nobody types.
+# Input from a pipe or a file always goes in.
+interactive=true
 tty=false
-[ -t 0 ] && tty=true
+if [ -t 0 ]; then
+	if [ -t 1 ]; then tty=true; else interactive=false; fi
+fi
 
 # The directory is mounted at the same path as on the Mac, so the paths in
 # Claude's answers and in its per-project history are the Mac's paths.
 # --detach-keys "" hands ctrl-p back to Claude Code.
-podman run --rm --interactive --tty="$tty" --detach-keys "" --init \
+podman run --rm --interactive="$interactive" --tty="$tty" --detach-keys "" --init \
 	--name "claude-sandbox-$$" --hostname claude-sandbox \
 	--network "$net" --dns none \
 	--userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
