@@ -166,19 +166,25 @@ the database, its WAL, and whatever else the application wrote there.
 
 ### Rehearse it
 
-On the Mac, with the sqlite3 that ships with macOS. The check is the
-database's own:
+On the Mac. `ls` shows what each application keeps. A database gets its own
+check, with the sqlite3 that ships with macOS, and only one that is there:
+sqlite3 makes an empty database for a name that does not exist, and an empty
+database passes.
 
 ```sh
 f=$(ls -1t ~/Backups/vserver/vserver-*.tgz | head -n 1)
 mkdir /tmp/restore-check && tar -xzf "$f" -C /tmp/restore-check data
-ls -l /tmp/restore-check/data/*
-sqlite3 /tmp/restore-check/data/<app>/app.db 'PRAGMA integrity_check'   # ok
+ls -lR /tmp/restore-check/data
+for db in /tmp/restore-check/data/*/*.db; do
+	[ -s "$db" ] && echo "$db: $(sqlite3 "file:$db?mode=ro" 'PRAGMA integrity_check')"
+done
 rm -rf /tmp/restore-check
 ```
 
-Then look at a row you know is there. Write down the date here when you have.
-**Not rehearsed yet.**
+Then open a file, or a row, you know is there. Write down the date here when
+you have. **Rehearsed 2026-10-27** for `game`: its volume holds one file,
+`rungs.json`, and no database — the template's read-only root leaves it nowhere
+else to write.
 
 ### Restore for real
 
