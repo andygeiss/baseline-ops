@@ -6,16 +6,15 @@ that runs when nobody is looking. Nothing tells you that a site is down. The
 backups are mostly a runbook nobody has rehearsed. The server cannot be rebuilt,
 or checked against its document, by running anything.
 
-**Status, 2026-10-27.** The boxes ticked below are written, and checked only
-with `sh -n` and `make -n`. None of it has run on vserver or in CI yet. Next,
-in order:
+**Status, 2026-10-27.** The boxes ticked below are written, and `checks.yml`
+passes on them, shellcheck included. `make backup` ran on the Mac on
+2026-10-27, and its archive was rehearsed the same day. The rest has not run on
+vserver yet. Next, in order:
 
-1. Push, and watch `checks.yml` pass. shellcheck has never run on these
-   scripts, so expect a few findings.
-2. Pick the monitoring service, write its ping URL to the server
+1. Pick the monitoring service, write its ping URL to the server
    (servers/vserver.md, "How you find out"), and run `make health-check
-   verify-host`. Then run `make backup` on the Mac.
-3. Run each phase's "Done when". A phase is done only after that.
+   verify-host`.
+2. Run each phase's "Done when". A phase is done only after that.
 
 Each phase below can be shipped on its own and ends in something you can check.
 They are in order of what a lost server would cost you. Delete this file when
@@ -103,7 +102,7 @@ Two separate things are at risk.
       the server: the Mac holds the backup, and you run it as often as you like
 - [ ] FileVault on the Mac, and on Time Machine's disk: the archive holds every
       secret, unencrypted
-- [ ] `runbooks/restore.md`, "Get the server's own state back", rehearsed once
+- [x] `runbooks/restore.md`, "Get the server's own state back", rehearsed once
       into a scratch directory
 
 **Done when:** both restores have run once from the real backup, and the

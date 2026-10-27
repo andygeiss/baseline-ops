@@ -1,6 +1,6 @@
 # Runbook: Backups and getting the data back
 
-**Last verified: 2026-08-15.** "Get the server's own state back" changed 2026-10-27, not yet run.
+**Last verified: 2026-08-15.** "Get the server's own state back": 2026-10-27, rehearsed.
 
 The database is one file in a volume on one machine, and so is every snapshot
 written beside it. This runbook covers the two things that follow from that:
@@ -133,7 +133,10 @@ ls -lR /tmp/restore-check/opt/caddy/sites /tmp/restore-check/opt/*/secrets
 rm -rf /tmp/restore-check
 ```
 
-Write down the date here when you have. **Not rehearsed yet.**
+Write down the date here when you have. **Rehearsed 2026-10-27**, from
+`vserver-20261027T193322Z.tgz`, the first archive `make backup` kept: the three
+site files named their domains, `wg0.key` was 45 bytes, and `game` has no
+secrets.
 
 ### Restore for real
 
