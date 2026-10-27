@@ -25,6 +25,7 @@ claude-sandbox --shell                          # a shell in the same sandbox, t
 | The hosts in `allowlist`, over HTTPS, through the proxy. | Any other host, DNS, the Mac's own services on `localhost`, or your LAN. |
 | | Root, a Linux capability, or a write outside its home, the directory, and `/tmp`. |
 | | claude.ai connectors, which reach your mail and your files, or publishing pages to claude.ai. The image turns both off. |
+| | The web through WebSearch or WebFetch. WebSearch runs on Anthropic's side, where the proxy cannot see it, so the launcher starts Claude with both turned off. |
 
 ## How a session runs
 
@@ -118,6 +119,7 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
 claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://api.anthropic.com/'    # 404: the API answered
 claude-sandbox --shell -c 'curl -sS https://example.com/'    # CONNECT tunnel failed, response 403
+claude-sandbox -p --output-format stream-json --verbose hi < /dev/null | jq 'select(.subtype == "init") | .tools | index("WebSearch")'    # null: no WebSearch
 ```
 
 The third one ends with the launcher naming the host it refused:
@@ -126,6 +128,10 @@ The third one ends with the launcher naming the host it refused:
 claude-sandbox: the proxy refused these hosts (claude-sandbox/allowlist in baseline-ops lets one in):
    1 example.com
 ```
+
+The fourth reads from `/dev/null`, so the launcher starts it without a
+terminal. With a terminal, Claude ends its output with a cursor code that jq
+cannot read.
 
 ## Let the agent reach another host
 
@@ -202,3 +208,5 @@ security delete-generic-password -s claude-sandbox
   not make one impossible.
 - **The agent can read its own sign-in.** The token is in its environment. It
   can send it only to the hosts above.
+- **A Claude you start from `--shell` can search the web.** The launcher turns
+  WebSearch and WebFetch off only for the Claude it starts itself.

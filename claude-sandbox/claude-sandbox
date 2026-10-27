@@ -57,6 +57,14 @@ fi
   claude setup-token
   security add-generic-password -U -a "$USER" -s claude-sandbox -w   # paste the token at the prompt'
 
+# The agent writes your code, so it does not read the open web. The proxy
+# cannot stop WebSearch: it runs on Anthropic's side, behind api.anthropic.com.
+# So Claude starts with both web tools denied. The = matters: with a space,
+# claude reads the words of a prompt that follows as more tool names.
+if [ "$cmd" = claude ]; then
+	set -- --disallowedTools=WebSearch,WebFetch "$@"
+fi
+
 # Internal means no gateway: the only thing the agent reaches on this network
 # is the proxy. No DNS either, so it cannot carry data out in name lookups.
 podman network exists "$net" ||
