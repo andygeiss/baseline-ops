@@ -139,8 +139,8 @@ omlx-tunnel-stop:
 	rm -f '$(TUNNEL_PLIST)'
 
 # The sandbox Claude Code runs in on the Mac you work on: a rootless podman
-# container that sees one directory under ~/workspace, and reaches only the
-# hosts in claude-sandbox/allowlist, through a proxy
+# container that sees one directory under ~/workspace, and reaches only public
+# HTTPS addresses, through egress
 # (runbooks/claude-sandbox.md). The files are copied, where `install` above
 # symlinks: an agent in the sandbox can write to this checkout, and a launcher
 # it could edit would let it out on the next start. So a change here reaches
@@ -156,7 +156,7 @@ SANDBOX_CONN = podman-machine-default
 claude-sandbox:
 	sh -n claude-sandbox/claude-sandbox
 	mkdir -p '$(SANDBOX_DIR)' '$(HOME)/.local/bin'
-	install -m 0644 claude-sandbox/allowlist claude-sandbox/Containerfile claude-sandbox/tinyproxy.conf '$(SANDBOX_DIR)/'
+	install -m 0644 claude-sandbox/Containerfile '$(SANDBOX_DIR)/'
 	install -m 0755 claude-sandbox/claude-sandbox '$(SANDBOX_DIR)/'
 	ln -sf '$(SANDBOX_DIR)/claude-sandbox' '$(HOME)/.local/bin/claude-sandbox'
 	v=$$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' claude-sandbox/Containerfile) && podman --connection $(SANDBOX_CONN) build --pull -t "localhost/claude-sandbox:$$v" '$(SANDBOX_DIR)' && podman --connection $(SANDBOX_CONN) run --rm "localhost/claude-sandbox:$$v" claude --version

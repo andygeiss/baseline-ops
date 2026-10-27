@@ -11,24 +11,27 @@ ARG CLAUDE_CODE_VERSION=2.1.310
 RUN npm install --global --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && cp "$(npm root --global)/@anthropic-ai/claude-code/bin/claude.exe" /claude
 
+# egress is the proxy: HTTPS to public addresses, and nothing else
+# (github.com/andygeiss/egress). go install checks the module against Go's
+# checksum database, so a tag moved on GitHub cannot change what this pin
+# builds, and it stamps the version egress -version prints. The flags build it
+# the way egress's own make build does.
+FROM docker.io/library/golang:1.27-trixie AS egress
+ARG EGRESS_VERSION=v0.1.1
+RUN CGO_ENABLED=0 go install -trimpath "github.com/andygeiss/egress@${EGRESS_VERSION}"
+
 # Debian, not alpine: the commands an agent writes assume GNU tools and glibc,
 # not busybox and musl. The image already ships what make check needs beyond
 # Go — gcc for go test -race, git, and make.
 FROM docker.io/library/golang:1.27-trixie
 
-# jq and ripgrep are for the agent's shell. tinyproxy-bin is the proxy alone;
-# the tinyproxy package around it adds a service, logrotate, and cron.
+# jq and ripgrep are for the agent's shell.
 RUN apt-get update \
- && apt-get install --yes --no-install-recommends jq ripgrep tinyproxy-bin \
+ && apt-get install --yes --no-install-recommends jq ripgrep \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=claude /claude /usr/local/bin/claude
-
-# The proxy's two files travel in the image. The podman machine shares only
-# ~/workspace, so it cannot mount them from the Mac, and a changed allowlist
-# reaches the proxy through make claude-sandbox like any other change here.
-COPY tinyproxy.conf /etc/tinyproxy/sandbox.conf
-COPY allowlist /etc/tinyproxy/allowlist
+COPY --from=egress /go/bin/egress /usr/local/bin/egress
 
 # uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
 # so a file the agent writes in the project belongs to you on the Mac.
@@ -38,10 +41,9 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash agent
 # build caches in the home volume, not in the base image's /go. GOTOOLCHAIN
 # stops go from downloading a newer toolchain than this image's.
 #
-# The Claude Code settings keep the agent to what the allowlist lets through:
-# no self-update (the image pins the version), no telemetry, no claude.ai
-# connectors — they reach your mail and your files — and no publishing pages
-# to claude.ai.
+# The Claude Code settings turn off what egress would let through: self-update
+# (the image pins the version), telemetry, claude.ai connectors — they reach
+# your mail and your files — and publishing pages to claude.ai.
 ENV LANG=C.UTF-8 \
     GOPATH=/home/agent/go \
     GOTOOLCHAIN=local \

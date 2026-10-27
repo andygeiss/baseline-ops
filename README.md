@@ -95,10 +95,8 @@ baseline-ops/
 │   ├── Caddyfile               ← the policy every site shares, plus `import sites/*`
 │   └── compose.yaml
 ├── claude-sandbox/             ← the sandbox Claude Code runs in on the Mac; make claude-sandbox installs it
-│   ├── allowlist               ← the hosts the agent may reach, and nothing else
 │   ├── claude-sandbox          ← the launcher: one session, two containers
-│   ├── Containerfile           ← the image both containers run
-│   └── tinyproxy.conf          ← the proxy: HTTPS to the allowlist only
+│   └── Containerfile           ← the image both containers run: Claude Code, and egress as the proxy
 ├── LICENSE                     ← MIT
 ├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make claude-sandbox (the Mac you work on)
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
@@ -106,7 +104,7 @@ baseline-ops/
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
-│   ├── claude-sandbox.md       ← run Claude Code in a sandbox that sees one directory; widen what it reaches
+│   ├── claude-sandbox.md       ← run Claude Code in a sandbox that sees one directory and reaches public HTTPS only
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time
@@ -171,12 +169,12 @@ not live there.
 builds `claude-sandbox/Containerfile` on an arm64 runner, the Mac's
 architecture, and asserts four things the launcher counts on:
 
-1. Claude Code runs, at the version the Containerfile pins;
+1. Claude Code and egress run, at the versions the Containerfile pins;
 2. the agent is uid 1000, the uid the launcher maps your Mac user to;
 3. `go test -race` works, which `make check` needs;
-4. the proxy lets an allowlisted host through, and gives any other host — or
-   an allowlisted one on another port — its own 403, logged the way the
-   launcher reads it at the end of a session.
+4. egress lets a public host through, and gives a private address — or a
+   public host on another port — its own 403, logged the way the launcher
+   reads it at the end of a session.
 
 It runs on every change to `claude-sandbox/`, and every Tuesday:
 `golang:1.27-trixie`, `node:24-trixie-slim`, and Debian's packages move under

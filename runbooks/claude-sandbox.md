@@ -4,9 +4,9 @@
 
 `claude-sandbox` runs Claude Code in a rootless podman container on the Mac you
 work on. The agent sees the directory you start it in — `~/workspace` or one
-below it — and nothing else of the Mac. It reaches the internet only through a
-proxy that lets through the hosts in
-[`claude-sandbox/allowlist`](../claude-sandbox/allowlist).
+below it — and nothing else of the Mac. It reaches the internet only through
+[egress](https://github.com/andygeiss/egress), a proxy that lets through HTTPS
+to public addresses and nothing else: not the Mac, and not your LAN.
 
 ```sh
 cd ~/workspace/baseline-reference
@@ -22,10 +22,9 @@ claude-sandbox --shell                          # a shell in the same sandbox, t
 |---|---|
 | The directory it started in, read and write, at the same path as on the Mac. What it changes there are your files. | The rest of the Mac: your home, `~/.ssh`, the keychain, the other projects, and the `~/.claude` of the Claude Code you run outside the sandbox. |
 | A home of its own: one podman volume per directory, holding Claude's settings and sessions, and Go's caches. | Another directory's volume, so the sessions of one project never show up in another. |
-| The hosts in `allowlist`, over HTTPS, through the proxy. | Any other host, DNS, the Mac's own services on `localhost`, or your LAN. |
+| Any public HTTPS site, through the proxy: what `curl` and WebFetch fetch. WebSearch too, which runs on Anthropic's side. | A private address, whatever name points at it: the Mac's own services, your LAN, the podman machine. Plain HTTP, ports other than 443, and DNS. |
 | | Root, a Linux capability, or a write outside its home, the directory, and `/tmp`. |
 | | claude.ai connectors, which reach your mail and your files, or publishing pages to claude.ai. The image turns both off. |
-| | The web through WebSearch or WebFetch. WebSearch runs on Anthropic's side, where the proxy cannot see it, so the launcher starts Claude with both turned off. |
 
 ## How a session runs
 
@@ -34,15 +33,16 @@ default podman machine. The Mac's default connection is the rootful one, and
 `--userns keep-id`, which makes the agent's files yours, works only rootless.
 
 ```
-agent ──(network claude-sandbox: no gateway, no DNS)──▶ proxy ──(podman network)──▶ allowlisted hosts
+agent ──(network claude-sandbox: no gateway, no DNS)──▶ proxy ──(podman network)──▶ public addresses, port 443
 ```
 
 - **The agent** runs as uid 1000, which podman maps to your Mac user, with no
   capabilities and a read-only root filesystem. Its only route anywhere is the
   proxy, through `HTTPS_PROXY`.
-- **The proxy** is tinyproxy, running as `nobody`. It filters by the
-  `tinyproxy.conf` and `allowlist` built into the image, and stops when the
-  session ends.
+- **The proxy** is egress, running as `nobody`. It lets a CONNECT to port 443
+  through when the address it connects to is public. It checks that address
+  after DNS, so a name that points into your LAN is refused like the address
+  itself. It stops when the session ends.
 
 ## Install, once per Mac
 
@@ -117,36 +117,40 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 
 ```sh
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
-claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://api.anthropic.com/'    # 404: the API answered
-claude-sandbox --shell -c 'curl -sS https://example.com/'    # CONNECT tunnel failed, response 403
-claude-sandbox -p --output-format stream-json --verbose hi | jq 'select(.subtype == "init") | .tools | index("WebSearch")'    # null: no WebSearch
+claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://example.com/'    # 200: a public site answered
+claude-sandbox --shell -c 'curl -sS https://192.168.1.1/'    # CONNECT tunnel failed, response 403
+claude-sandbox --shell -c 'curl -sS https://host.containers.internal/'    # the same 403: that name is the Mac
+claude-sandbox -p --allowedTools=WebFetch 'Fetch https://example.com/ and reply with its title only'    # Example Domain
 ```
 
-The third one ends with the launcher naming the host it refused:
+The third one ends with the launcher naming what the proxy refused:
 
 ```text
-claude-sandbox: the proxy refused these hosts (claude-sandbox/allowlist in baseline-ops lets one in):
-   1 example.com
+claude-sandbox: the proxy refused these — it lets through HTTPS to public addresses only:
+   1 192.168.1.1:443 (192.168.1.1 is not a public address)
 ```
 
-## Let the agent reach another host
+## Read what the proxy refused
 
-Every session ends with that list, when the proxy refused something. Add the
-host to [`claude-sandbox/allowlist`](../claude-sandbox/allowlist), one per
-line, or `*.example.com` for every subdomain. Then run `make claude-sandbox`
-and start a new session.
+A session ends with that list whenever egress refused something. Nothing in
+this repository lets one of them through: what counts as public is egress's
+own code, and changing it is an egress release. So the list is for reading.
 
-Each host you add is a place the agent can send your code to. Add the hosts a
-task needs, not the ones that would be handy.
+- **A private address** means something sent the agent toward the Mac or your
+  LAN: a page it read, a file in the directory, or your own prompt. Find out
+  which before you run what it wrote.
+- **A port other than 443, or plain HTTP,** is a tool that asked for something
+  egress does not carry. It carries HTTPS on port 443, and nothing else.
 
-## Upgrade Claude Code
+## Upgrade Claude Code or egress
 
-Bump `ARG CLAUDE_CODE_VERSION` in
-[`claude-sandbox/Containerfile`](../claude-sandbox/Containerfile) and its row
+Bump `ARG CLAUDE_CODE_VERSION` or `ARG EGRESS_VERSION` in
+[`claude-sandbox/Containerfile`](../claude-sandbox/Containerfile), and its row
 in [VERSIONS.md](../VERSIONS.md), then:
 
 ```sh
-make claude-sandbox                                       # the last line prints the new version
+make claude-sandbox                                       # the last line prints Claude Code's version
+claude-sandbox --shell -c 'egress -version'               # and this one egress's
 podman --connection podman-machine-default image prune    # drops the image it replaced
 ```
 
@@ -197,12 +201,16 @@ security delete-generic-password -s claude-sandbox
   agent one directory, but the Linux VM it runs in sees every project. An
   agent that broke out of the container, through a bug in podman or in the
   Linux kernel, would see them too — and nothing else of the Mac.
-- **An allowed host can carry data out.** The agent sends your code to
-  `api.anthropic.com`, because that is how Claude Code works. And the Go module
-  proxy fetches any module path it is asked for, so a request can carry data
-  to a server someone else runs. The allowlist makes a leak smaller. It does
-  not make one impossible.
-- **The agent can read its own sign-in.** The token is in its environment. It
-  can send it only to the hosts above.
-- **A Claude you start from `--shell` can search the web.** The launcher turns
-  WebSearch and WebFetch off only for the Claude it starts itself.
+- **The agent reads the open web.** A page can carry instructions, and the
+  agent may follow them: write something into the directory, or send your code
+  to any public HTTPS site. egress keeps the agent off the Mac and your LAN. It
+  does not keep your code in.
+- **The agent can read its own sign-in.** The token is in its environment, and
+  egress lets it reach any public host. Whoever gets the token can use your
+  Claude subscription with it.
+- **On `KNOPPERS`, the agent gets as far as what only the house may open.**
+  egress judges the address, not who is asking. A Mac on `KNOPPERS` reaches
+  vserver through the house's tunnel, from `10.77.0.2`, the one address a
+  `house-only` site lets in. So the agent can open Portainer's login page, and
+  the password is all that stands between it and root on vserver
+  ([runbooks/portainer.md](portainer.md)).

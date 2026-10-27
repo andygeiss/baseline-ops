@@ -57,36 +57,30 @@ fi
   claude setup-token
   security add-generic-password -U -a "$USER" -s claude-sandbox -w   # paste the token at the prompt'
 
-# The agent writes your code, so it does not read the open web. The proxy
-# cannot stop WebSearch: it runs on Anthropic's side, behind api.anthropic.com.
-# So Claude starts with both web tools denied. The = matters: with a space,
-# claude reads the words of a prompt that follows as more tool names.
-if [ "$cmd" = claude ]; then
-	set -- --disallowedTools=WebSearch,WebFetch "$@"
-fi
-
 # Internal means no gateway: the only thing the agent reaches on this network
 # is the proxy. No DNS either, so it cannot carry data out in name lookups.
 podman network exists "$net" ||
 	podman network create --internal --disable-dns "$net" > /dev/null
 
-# The proxy is the agent's only way out. It sits on both networks, filters by
-# the allowlist the image was built with, and lives exactly as long as this
-# session.
+# The proxy is egress, the agent's only way out. It sits on both networks, lets
+# through HTTPS to public addresses and nothing else, and lives exactly as long
+# as this session. egress listens on loopback by default. The agent reaches it
+# over $net, so :8888 opens it on every address the proxy has.
 proxy=claude-sandbox-proxy-$$
 podman run --detach --rm --name "$proxy" \
 	--network podman --network "$net" \
 	--read-only --cap-drop all --security-opt no-new-privileges --user nobody \
-	"$image" tinyproxy -d -c /etc/tinyproxy/sandbox.conf > /dev/null
+	"$image" egress -listen :8888 > /dev/null
 
-# On the way out, name the hosts the proxy refused, so a missing one is a line
-# in the allowlist away. Then stop the proxy.
+# On the way out, name what the proxy refused: a private address, a port other
+# than 443, or plain HTTP. Nothing lets one of those through, so the list is
+# for reading: a private address means something sent the agent toward the Mac
+# or the LAN. Then stop the proxy.
 finish() {
-	refused=$(podman logs "$proxy" 2>&1 |
-		sed -n 's/.*refused on filtered domain "\([^"]*\)".*/\1/p' | sort | uniq -c)
+	refused=$(podman logs "$proxy" 2>&1 | sed -n 's/^egress: refuse //p' | sort | uniq -c)
 	podman stop --time 0 "$proxy" > /dev/null 2>&1 || true
 	[ -z "$refused" ] ||
-		printf 'claude-sandbox: the proxy refused these hosts (claude-sandbox/allowlist in baseline-ops lets one in):\n%s\n' "$refused" >&2
+		printf 'claude-sandbox: the proxy refused these — it lets through HTTPS to public addresses only:\n%s\n' "$refused" >&2
 }
 trap finish EXIT
 trap 'exit 1' HUP INT TERM

@@ -29,9 +29,9 @@ None of them reaches the server.
 | Component | Pinned version | Released | Notes |
 |---|---|---|---|
 | Claude Code | **2.1.310** | 2026-10-23 | `ARG CLAUDE_CODE_VERSION` in `claude-sandbox/Containerfile`. Exact, like the server's own stacks: what the agent can do changes only through an edit someone reads. The image never updates itself. |
-| `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
+| egress | **v0.1.1** | 2026-10-27 | `ARG EGRESS_VERSION` in `claude-sandbox/Containerfile`: the proxy, HTTPS to public addresses and nothing else. Exact, like Claude Code: what the agent can reach changes only through an edit someone reads. Never v0.1.0: it is retracted, because a CONNECT to `[::%en0]:443` reached the machine itself. |
+| `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image, and the stage that builds egress. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
 | `node` base image | **24-trixie-slim** | 24.22.1, 2026-10-20 | The install stage only: npm picks Claude Code's native binary for the platform. Nothing of Node reaches the sandbox. |
-| tinyproxy | Debian trixie's `tinyproxy-bin` | 1.11.2 | The proxy, from the same image. Debian's own package, so a rebuild with `--pull` moves it, not an edit here. |
 | podman | not pinned | 6.1.4 | Homebrew's, on the Mac; the sandbox was verified with 6.1.4. It needs a rootless connection to the machine — `--userns keep-id` exists only there — and a machine that shares only `~/workspace`: 6.1.4's default shares all of `/Users`, and `~/.config/containers` read-write. |
 
 ## Version policy
@@ -89,7 +89,9 @@ None of them reaches the server.
 - Claude Code: https://www.npmjs.com/package/@anthropic-ai/claude-code — the
   registry's `time` field dates each release — and
   https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md
+- egress: https://github.com/andygeiss/egress/tags, and
+  `go list -m -json github.com/andygeiss/egress@latest`, which names the
+  version the Go module proxy serves and dates it (checked 2026-10-27)
 - Base images: https://hub.docker.com/_/golang and https://hub.docker.com/_/node;
   Node's release dates: https://nodejs.org/dist/index.json
-- tinyproxy: https://packages.debian.org/trixie/tinyproxy-bin
 - podman: `podman --version` on the Mac

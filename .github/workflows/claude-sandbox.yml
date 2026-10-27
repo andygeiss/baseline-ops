@@ -4,8 +4,8 @@ name: claude-sandbox
 # tags and Debian's packages, so what it holds moves under a Containerfile
 # nobody edited. This gate builds it the way make claude-sandbox does, and
 # checks what the launcher counts on and nothing else would catch: the pinned
-# Claude Code runs, the agent is uid 1000, go test -race works, and the proxy
-# lets the allowlist through and refuses everything else.
+# Claude Code and egress run, the agent is uid 1000, go test -race works, and
+# egress lets a public host through and refuses a private address.
 #
 # The launcher's own flags — the mounts, the internal network, the dropped
 # capabilities — need the Mac's podman machine. The runbook's "Check that it
@@ -56,6 +56,16 @@ jobs:
             *) echo "want Claude Code $want"; exit 1 ;;
           esac
 
+      # go install stamps the version it built, and egress -version prints it.
+      # A build of anything else prints something else, or "unknown".
+      - name: egress runs, at the pinned version
+        run: |
+          set -eu
+          want=$(sed -n 's/^ARG EGRESS_VERSION=//p' claude-sandbox/Containerfile)
+          got=$(docker run --rm "$IMAGE" egress -version)
+          echo "$got"
+          [ "$got" = "$want" ] || { echo "want egress $want"; exit 1; }
+
       # The launcher maps your Mac user to uid 1000 (--userns keep-id), which is
       # what makes the agent's files yours. Under any other uid they belong to a
       # stranger.
@@ -75,22 +85,22 @@ jobs:
             printf "package race\n\nimport \"testing\"\n\nfunc TestRace(t *testing.T) {}\n" > race_test.go
             go test -race ./...'
 
-      # The proxy is the agent's only way out, and Debian's tinyproxy moves
-      # under it. A release that dropped FilterType fnmatch would not start, or
-      # would start and filter nothing. It runs here as the launcher runs it:
-      # as nobody, read-only, with no capabilities, on the config and allowlist
-      # the image carries.
+      # The proxy is the agent's only way out. It runs here as the launcher runs
+      # it: as nobody, read-only, with no capabilities, and listening on every
+      # address, so the agent's network reaches it.
       - name: Start the proxy as the launcher does
         run: |
           set -eux
           docker network create sandbox
           docker run -d --name proxy --network sandbox \
             --read-only --cap-drop ALL --security-opt no-new-privileges:true --user nobody \
-            "$IMAGE" tinyproxy -d -c /etc/tinyproxy/sandbox.conf
+            "$IMAGE" egress -listen :8888
 
       # Any answer from Anthropic's side counts — the API's root says 404. The
-      # retries wait for the proxy to listen.
-      - name: An allowlisted host gets through
+      # retries wait for the proxy to listen. egress looks the name up through
+      # the network's resolver, which sits at a private address, so this also
+      # shows that its check leaves DNS alone.
+      - name: A public host gets through
         run: |
           set -eu
           code=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
@@ -99,25 +109,25 @@ jobs:
 
       # Refused has to mean the proxy's own 403 on the CONNECT: a network error
       # fails the same curl, and would pass a check that only wanted a failure.
-      # The launcher names refused hosts at the end of a session by reading
-      # this exact log line.
-      - name: Any other host gets the proxy's 403, logged the way the launcher reads it
+      # 10.0.0.1 stands in for your LAN. The launcher names what the proxy
+      # refused at the end of a session by reading this log line.
+      - name: A private address gets the proxy's 403, logged the way the launcher reads it
         run: |
           set -eu
           if out=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
-            curl -sS -o /dev/null https://example.com/ 2>&1); then
-            echo "example.com got through the proxy"; exit 1
+            curl -sS -o /dev/null --max-time 10 https://10.0.0.1/ 2>&1); then
+            echo "10.0.0.1 got through the proxy"; exit 1
           fi
           echo "$out"
           case "$out" in
             *"CONNECT tunnel failed, response 403"*) ;;
             *) echo "failed, but not with the proxy's 403"; exit 1 ;;
           esac
-          docker logs proxy 2>&1 | grep -F 'refused on filtered domain "example.com"'
+          docker logs proxy 2>&1 | grep '^egress: refuse 10\.0\.0\.1:443 '
 
-      # ConnectPort 443: an allowlisted host stays shut on any other port, so
-      # the agent gets HTTPS and not SSH or mail.
-      - name: An allowlisted host on another port gets the proxy's 403
+      # Port 443 only: a public host stays shut on any other port, so the agent
+      # gets HTTPS and not SSH or mail.
+      - name: A public host on another port gets the proxy's 403
         run: |
           set -eu
           if out=$(docker run --rm --network sandbox --env https_proxy="$PROXY" "$IMAGE" \
