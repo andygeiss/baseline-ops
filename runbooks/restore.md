@@ -1,6 +1,6 @@
 # Runbook: Backups and getting the data back
 
-**Last verified: 2026-08-15**
+**Last verified: 2026-08-15.** "Get the server's own state back" added 2026-10-27, not yet run.
 
 The database is one file in a volume on one machine, and so is every snapshot
 written beside it. This runbook covers the two things that follow from that:
@@ -93,3 +93,77 @@ the thing it protects.** Getting it off the box is a separate job with its own
 credentials and its own rehearsal, and it is not written here because no
 application has needed it yet. If yours does, that job belongs in this runbook
 before it belongs in a cron line nobody remembers.
+
+## Get the server's own state back
+
+Some files are true of this machine only, so no repository holds them.
+`servers/backup` copies them off the box every night, with restic, encrypted,
+to S3-compatible storage:
+
+| What | Where | Lost means |
+|---|---|---|
+| site files | `/opt/caddy/sites/*.caddy` | every domain, written again from memory |
+| secrets, `site.env`, `litestream.yml`, `.env` | `/opt/<app>/` | every credential issued again |
+| wg0's key, and the house's peer | `/etc/systemd/network/` | the house set up again: `make wg-house` |
+| Portainer's admin user and settings | volume `portainer_data` | Portainer set up again |
+| certificates and the ACME account | volume `caddy_caddy_data` | Caddy asks for them again, and many at once meets Let's Encrypt's rate limits |
+
+The applications' databases are not in it. They are the first half of this
+runbook: Litestream, or the application's own answer.
+
+### Set it up, once per server
+
+Use a bucket of its own and a key of its own. The Litestream replicas get
+another bucket and another key, so a leaked application key cannot delete the
+host backup.
+
+1. Make two checks on the monitoring service, one for the health check and one
+   for the backup (servers/vserver.md, "How you find out"). Write the first
+   URL to the server:
+
+   ```sh
+   ssh root@vserver 'umask 077 && cat > /etc/health-check.url'   # paste the URL, then ctrl-d
+   ```
+
+2. Write `/etc/backup.env`. The format is in `servers/backup`'s header. Make
+   the password long and random, and **save it in your password manager
+   too**. Without it, the backup cannot be read.
+
+   ```sh
+   ssh root@vserver 'umask 077 && cat > /etc/backup.env'   # paste, then ctrl-d
+   ```
+
+3. Make the repository, once:
+
+   ```sh
+   ssh root@vserver 'apt-get install -y restic && set -a && . /etc/backup.env && restic init'
+   ```
+
+4. Install both timers, and check them:
+
+   ```sh
+   make health-check backup
+   make verify-host
+   ```
+
+### Rehearse it
+
+Restore the latest snapshot into a scratch directory, never over `/`, and
+look at it. Check that the site files name your domains and that a secret is
+the right size, not empty:
+
+```sh
+ssh root@vserver 'set -a && . /etc/backup.env && restic restore latest --target /root/restore-check'
+ssh root@vserver 'ls -R /root/restore-check/opt/caddy/sites && rm -rf /root/restore-check'
+```
+
+Write down the date here when you have. **Not rehearsed yet.**
+
+### Restore for real
+
+On a server that lost its disk: rebuild it far enough to run Docker and
+restic, then write `/etc/backup.env` again from your password manager and the
+storage provider's console. Restore into a scratch directory as in the
+rehearsal, then copy back what you need, with the owners and modes the table
+in servers/vserver.md, "Directory layout", names. Stop a stack before you put
+back its volume.

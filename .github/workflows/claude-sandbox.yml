@@ -5,8 +5,8 @@ name: claude-sandbox
 # nobody edited. This gate builds it the way make claude-sandbox does, and
 # checks what the sandbox counts on and nothing else would catch: the pinned
 # Claude Code, egress and statusline run, the agent is uid 1000, go test -race
-# works, egress lets a public host through and refuses a private address, and
-# the status line command draws a line.
+# works, egress lets a public host through and refuses a private address, the
+# status line command draws a line, and the managed settings start on Opus 5.5.
 #
 # The launcher's own flags — the mounts, the internal network, the dropped
 # capabilities — need the Mac's podman machine. The runbook's "Check that it
@@ -35,7 +35,7 @@ jobs:
     # check binaries the Mac never runs.
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # --pull, as make claude-sandbox builds: the base images as they are
       # today, not as the runner cached them.

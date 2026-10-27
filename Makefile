@@ -1,7 +1,8 @@
 # Repository tooling. This repo has no code to build; `install` and `uninstall`
-# wire it into the current user's Claude Code as a personal skill, and seven
-# targets set up a machine rather than build anything: `sshd-tunnel`,
-# `conn-limits`, `auto-reboot`, `wg-exit` and `wg-house` on the server,
+# wire it into the current user's Claude Code as a personal skill, and the
+# rest set up or check a machine rather than build anything: `sshd-hardening`,
+# `sshd-tunnel`, `conn-limits`, `auto-reboot`, `wg-exit`, `wg-house`,
+# `health-check`, `backup` and `verify-host` on the server,
 # `omlx-tunnel` on the house machine, `claude-sandbox` on the Mac you work on —
 # each a line that must be typed exactly, so it is not typed. `install` is the
 # first target: a bare `make` installs.
@@ -13,7 +14,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: auto-reboot claude-sandbox conn-limits install omlx-tunnel omlx-tunnel-stop sshd-tunnel uninstall wg-exit wg-house
+.PHONY: auto-reboot backup claude-sandbox conn-limits health-check install omlx-tunnel omlx-tunnel-stop sshd-hardening sshd-tunnel uninstall verify-host wg-exit wg-house
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -30,6 +31,15 @@ install:
 
 uninstall:
 	if [ -L "$(SKILL_DIR)" ]; then rm "$(SKILL_DIR)"; fi
+
+# Key-only ssh, which servers/vserver.md, "Reaching it", says MUST hold. 01-
+# sorts before the drop-ins Ubuntu's cloud images ship, such as
+# 50-cloud-init.conf, which can turn password authentication back on, and sshd
+# keeps the first value it reads. Runs twice safely: the drop-in is rewritten,
+# sshd -t checks it before the reload, a reload keeps the session you are in,
+# and the last line prints the settings sshd actually runs with.
+sshd-hardening:
+	ssh $(ROOT) 'printf "PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n" > /etc/ssh/sshd_config.d/01-hardening.conf && sshd -t && systemctl reload ssh && sshd -T | grep -E "^(passwordauthentication|kbdinteractiveauthentication|permitrootlogin) "'
 
 # Lets an `ssh -R` from a house machine bind the server's docker0 address
 # (172.17.0.1) instead of loopback, so a container can reach a service the
@@ -104,6 +114,46 @@ wg-house:
 	umask 077 && ssh $(ROOT) sh -s < servers/wg-house > '$(WG_HOUSE_CONF)'
 	ssh $(ROOT) 'wg show wg0'
 	ls -l '$(WG_HOUSE_CONF)'
+
+# How you find out: a timer that asks the server whether it is healthy every
+# five minutes, and pings a dead man's switch outside it (servers/vserver.md,
+# "How you find out"). The ping URL is a secret, written by hand to
+# /etc/health-check.url, mode 0400. This target refuses to start the timer
+# without it. Runs twice safely: the script and units are rewritten, and the
+# last line runs the check once and prints the timer.
+health-check:
+	sh -n servers/health-check
+	scp servers/health-check $(ROOT):/usr/local/sbin/health-check
+	scp servers/health-check.service servers/health-check.timer $(ROOT):/etc/systemd/system/
+	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/health-check && test -s /etc/health-check.url || { echo "write the ping URL to /etc/health-check.url, mode 0400, first" >&2; exit 1; }'
+	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now health-check.timer && systemctl start health-check.service && journalctl -u health-check.service -n 10 --no-pager && systemctl list-timers health-check.timer'
+
+# The server's own state, off the box, nightly with restic (runbooks/restore.md,
+# "Get the server's own state back"). restic comes from Ubuntu's archive, so
+# unattended-upgrades patches it. /etc/backup.env, mode 0400, is written by
+# hand, and so is the one `restic init` (both in the runbook). This target
+# refuses to start the timer without them. Runs twice safely: the script and
+# units are rewritten, and the last line runs one backup and prints the
+# snapshots restic has.
+backup:
+	sh -n servers/backup
+	ssh $(ROOT) 'NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=300 restic'
+	scp servers/backup $(ROOT):/usr/local/sbin/backup
+	scp servers/backup.service servers/backup.timer $(ROOT):/etc/systemd/system/
+	ssh $(ROOT) 'chmod 0755 /usr/local/sbin/backup && test -s /etc/backup.env || { echo "write /etc/backup.env, mode 0400, first — runbooks/restore.md" >&2; exit 1; }'
+	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now backup.timer && systemctl start backup.service && set -a && . /etc/backup.env && restic snapshots --latest 1'
+
+# Checks the server against servers/vserver.md and changes nothing: every
+# claim the document makes that a command can answer, one line each, ok or
+# FAIL. The script runs from stdin, as wg-house does, and takes Docker's
+# versions from VERSIONS.md, so neither lives in two places. Run it after any
+# change to the server, after a rebuild, and as the quarterly re-verify.
+verify-host:
+	sh -n servers/verify-host
+	ssh $(ROOT) sh -s -- \
+		"$$(sed -n 's/^| Docker Engine | \*\*\([^*]*\)\*\*.*/\1/p' VERSIONS.md)" \
+		"$$(sed -n 's/^| Docker Compose | \*\*\([^*]*\)\*\*.*/\1/p' VERSIONS.md)" \
+		< servers/verify-host
 
 # The house side of the oMLX tunnel: a launchd agent that keeps one `ssh -R`
 # open, so the proxy — and any container on the server — reaches the model host

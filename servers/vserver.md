@@ -23,7 +23,9 @@ One line changes when the address does. SSH is key-only:
 
 - `andygeiss` is the deploy account. It is in the `docker` group and in
   `sudo`; sudo asks for its password, and that password never works over SSH.
-- Password authentication MUST be off in `sshd_config`.
+- Password authentication MUST be off. `make sshd-hardening` writes it to
+  `/etc/ssh/sshd_config.d/01-hardening.conf`, which sorts before any drop-in
+  that could turn it back on, and `make verify-host` checks it.
 - Your private key stays on your machine, protected by a passphrase.
 
 **Membership in the `docker` group is root on this host.** Anyone who reaches
@@ -130,6 +132,7 @@ owning it.
 |---|---|---|
 | Docker Engine + Compose plugin | Builds and runs everything | From Docker's own repository, never the distribution package — the distro ships an old Engine and often no Compose plugin at all. Follow https://docs.docker.com/engine/install/ for the distribution. Versions in [VERSIONS.md](../VERSIONS.md). |
 | The proxy | One Caddy container fronts every application | Runs from `/opt/caddy`, deployed from this repository's `caddy/` — [runbooks/caddy.md](../runbooks/caddy.md). It is the only stack with a `ports:` block. |
+| restic | Copies the server's own state off the box, nightly | From Ubuntu's archive, so unattended-upgrades patches it. `make backup` installs it; [runbooks/restore.md](../runbooks/restore.md), "Get the server's own state back". |
 | wireguard-tools | The `wg` command: makes WireGuard keys, and shows the tunnel | From Ubuntu's archive, so unattended-upgrades patches it. The tunnel itself is the kernel's, and systemd-networkd brings it up, so it runs no service of its own — "The house's way out". |
 | nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy is a container; Go runs inside the build stage. A package installed on the host is a package that drifts. |
 
@@ -172,6 +175,35 @@ Before `make auto-reboot` ran on 2026-10-18, nothing rebooted the server: it
 ran kernel 7.0.0-30 for 52 days while -31, -34 and -38 were installed and
 waited. [runbooks/host.md](../runbooks/host.md) is the same
 job by hand: in a version pass, or for a fix that should not wait for 04:00.
+
+## How you find out
+
+The server cannot report its own death, so both signals end outside it, at a
+hosted service that speaks the healthchecks.io ping API. One check there is a
+dead man's switch: it alerts when a ping says something failed, and when no
+ping comes at all.
+
+- **From inside, every five minutes.** `make health-check` installs
+  `servers/health-check` and a systemd timer. It pings when every check
+  passes. When one fails, it pings `/fail` with the reasons, so the alert says
+  what broke. It checks that the root filesystem and `/var/lib/docker` are
+  below 80 %, and that every stack under `/opt` is running and healthy. It
+  checks that `conn-limits` and `wg-exit` are active if they are enabled. It
+  also fails when a reboot has waited more than two days, which means the
+  04:00 reboot is not happening. A server that is down, or did not come back
+  from that reboot, sends nothing, and the switch raises the alert.
+- **Nightly, the backup.** `servers/backup` pings a check of its own: the same
+  protocol, a second URL in `/etc/backup.env`.
+- **From outside.** The same service runs an HTTP check on every site in
+  `/opt/caddy/sites`, including when its certificate expires. Add a check
+  there when you add a site. A Caddy that is down, a wedged container, and
+  wrong DNS all look the same from outside: no answer.
+
+The ping URLs are secrets, because whoever has one can silence its check. They
+are files on this machine, mode `0400`, in "Secrets" below.
+
+`make verify-host` is the third kind of check: run by hand, it compares the
+machine with this document and changes nothing.
 
 ## Ports
 
@@ -462,7 +494,12 @@ an image, not in a tarball, not in a Compose `environment:` block —
   `CREDENTIALS_DIRECTORY=/run/secrets` so the application finds them there. That
   variable is the contract; the path is this server's answer to it.
 
-One credential belongs to the host rather than to an application: wg0's key,
+Three credentials belong to the host rather than to an application. The
+first two are mode `0400`, owned by root: `/etc/health-check.url`, the
+health check's ping URL, and `/etc/backup.env`, which holds the backup's
+storage credentials, its encryption password, and its own ping URL. The
+password also lives in your password manager, because a backup whose key dies
+with the server is not a backup. The third is wg0's key,
 `/etc/systemd/network/wg0.key`. It is mode `0640` and group `systemd-network`,
 because networkd reads it as that group ("The house's way out").
 

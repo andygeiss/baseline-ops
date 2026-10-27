@@ -47,16 +47,23 @@ make uninstall  # removes the symlink
 ## Server setup that runs from here
 
 ```sh
+make sshd-hardening # once per server: key-only ssh, password authentication off
 make sshd-tunnel    # once per server: let a house machine's ssh -R bind docker0
 make conn-limits    # once per server: cap what one address may open on :443
 make auto-reboot    # once per server: reboot at 04:00 when an update needs it
 make wg-exit        # once per server: let the house's WireGuard tunnel out to the internet
 make wg-house       # once, and again to change the key: the house gateway's WireGuard file
+make health-check   # once per server: every five minutes, tell a dead man's switch whether the server is healthy
+make backup         # once per server: nightly, the server's own state off the box, with restic
+make verify-host    # any time: check the server against servers/vserver.md; changes nothing
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
 make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
-Seven targets, and none of them an application's. Two are the two sides of one
+None of these targets is an application's. `sshd-hardening`, `health-check`,
+`backup` and `verify-host` are the newest ones: [servers/vserver.md](servers/vserver.md),
+"Reaching it" and "How you find out", and [runbooks/restore.md](runbooks/restore.md),
+"Get the server's own state back", say what each one is for. Of the rest, two are the two sides of one
 tunnel — the server's sshd drop-in and the Mac's launchd agent (`make
 omlx-tunnel-stop` takes that one away again); [servers/vserver.md](servers/vserver.md),
 "Tunnels from the house", says why a house machine carries a service in over
@@ -87,6 +94,7 @@ yet — the steps have not run twice.
 ```
 baseline-ops/
 ├── .github/workflows/
+│   ├── checks.yml              ← shellcheck, caddy validate, docker compose config
 │   ├── claude-sandbox.yml      ← builds claude-sandbox/Containerfile on arm64, like the Mac; checks what the launcher counts on
 │   └── templates.yml           ← builds templates/Dockerfile against baseline-reference
 ├── bin/
@@ -111,7 +119,10 @@ baseline-ops/
 │   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
+│   ├── backup                  ← the server's own state off the box, with restic; make backup ships it, with its units
 │   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
+│   ├── health-check            ← every five minutes, ping a dead man's switch; make health-check ships it, with its units
+│   ├── verify-host             ← the server checked against vserver.md; make verify-host runs it
 │   ├── vserver.md              ← the machine: what is installed, which accounts, which ports
 │   ├── wg-exit                 ← forwarding and NAT for the house's tunnel; make wg-exit ships it
 │   └── wg-house                ← a new key for the house's gateway; make wg-house runs it
@@ -150,10 +161,13 @@ manual. The weekly run is the one that earns its keep — `alpine:3.24` and
 `golang:1.27-alpine` are minor tags, so what they name changes under a template
 nobody edited.
 
-**`compose.yaml`, `caddy/`, and `portainer/` are not gated.** Validating either needs a server
-context invented on the runner — an external `web` network, a secrets file, a
-site file with a domain — and an invented context is one more thing that
-drifts. Both are reviewed by hand against
+**`compose.yaml`, `caddy/`, `portainer/`, and the shell scripts are checked,
+not run.** [`.github/workflows/checks.yml`](.github/workflows/checks.yml) runs
+`docker compose config` on the three compose files and `caddy validate` on the
+Caddyfile, with one site per snippet. It also runs shellcheck on every
+`#!/bin/sh` file. The context each check invents, such as an image tag, an
+empty secret, or an example domain, is written inline in the workflow. Whether
+they work on the server is still a runbook's job:
 [runbooks/new-app.md](runbooks/new-app.md) and
 [runbooks/caddy.md](runbooks/caddy.md).
 
@@ -167,17 +181,10 @@ not live there.
 
 [`.github/workflows/claude-sandbox.yml`](.github/workflows/claude-sandbox.yml)
 builds `claude-sandbox/Containerfile` on an arm64 runner, the Mac's
-architecture, and asserts five things the sandbox counts on:
-
-1. Claude Code, egress and statusline run, at the versions the Containerfile
-   pins;
-2. the agent is uid 1000, the uid the launcher maps your Mac user to;
-3. `go test -race` works, which `make check` needs;
-4. egress lets a public host through, and gives a private address — or a
-   public host on another port — its own 403, logged the way the launcher
-   reads it at the end of a session;
-5. the status line command that the image's managed settings name draws a
-   line from Claude Code's JSON.
+architecture, and checks what the sandbox counts on that nothing else would
+catch. Its step names are the list: each one is a claim, such as "The agent is
+uid 1000", and a step that fails names the claim that broke. The list is not
+copied here, so the two cannot drift.
 
 It runs on every change to `claude-sandbox/`, and every Tuesday:
 `golang:1.27-trixie`, `node:24-trixie-slim`, and Debian's packages move under

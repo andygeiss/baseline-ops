@@ -1,0 +1,9 @@
+# The actions are pinned by commit, and this keeps the pins moving. Nothing
+# else is here on purpose: VERSIONS.md is updated by hand, against the sources
+# it lists, so every version change is an edit someone reads.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

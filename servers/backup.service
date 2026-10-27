@@ -1,0 +1,8 @@
+[Unit]
+Description=Copy the server's own state off the box, with restic
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/backup

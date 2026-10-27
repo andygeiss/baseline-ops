@@ -1,0 +1,70 @@
+name: checks
+
+# The files here that templates.yml and claude-sandbox.yml do not build: the
+# shell scripts, the proxy's Caddyfile, and the three compose files. Each check
+# needs only a little context invented on the runner, such as a site file, an
+# image tag, or an empty secret. That context is written inline, where a
+# reviewer sees it next to the check.
+on:
+  push: {branches: [main]}
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Every file that starts #!/bin/sh. Most of them run as root on the
+      # server, and they are written for sh, not bash, so -s sh holds them to it.
+      - name: shellcheck
+        run: |
+          set -eu
+          files=$(grep -rlx '#!/bin/sh' bin claude-sandbox servers)
+          echo "$files"
+          shellcheck --version
+          shellcheck -s sh -S warning $files
+
+  caddy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # One site per snippet, as the Caddyfile's own header writes them. An
+      # empty sites/ would leave every snippet unread, and a snippet's typo
+      # surfaces only once a site imports it. The image is the one
+      # caddy/compose.yaml pins, so the check runs the Caddy the server runs.
+      - name: caddy validate
+        run: |
+          set -eu
+          image=$(sed -n 's/^ *image: *\([^ ]*\).*/\1/p' caddy/compose.yaml)
+          sites=$(mktemp -d)
+          printf 'todo.example.com {\n\timport site todo\n}\n' > "$sites/todo.caddy"
+          printf 'omlx.example.com {\n\timport tunnel 18000\n}\n' > "$sites/omlx.caddy"
+          printf 'portainer.example.com {\n\timport house-only portainer:9000\n}\n' > "$sites/portainer.caddy"
+          docker run --rm \
+            -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$sites:/etc/caddy/sites:ro" \
+            "$image" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # docker compose config reads a file the way up would, and stops at a
+      # key spelled wrong or a value of the wrong shape. The template needs
+      # what a deploy writes beside it: .env's IMAGE_TAG and the secret file.
+      - name: docker compose config
+        run: |
+          set -eu
+          app=$(mktemp -d)
+          cp templates/compose.yaml "$app/"
+          mkdir "$app/secrets" && : > "$app/secrets/smtp-key"
+          echo IMAGE_TAG=v0.0.0 > "$app/.env"
+          (cd "$app" && docker compose config --quiet)
+          docker compose -f caddy/compose.yaml config --quiet
+          docker compose -f portainer/compose.yaml config --quiet

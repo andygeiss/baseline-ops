@@ -1,0 +1,58 @@
+#!/bin/sh
+# Asks the server whether it is healthy, every five minutes, and tells a dead
+# man's switch outside it. `make health-check` in this repository ships this
+# file and the timer that runs it; servers/vserver.md, "How you find out", says
+# what the switch does with the answer.
+#
+# A pass pings the URL in /etc/health-check.url. A failure pings the same URL
+# with /fail appended, and the reasons as the body, so the alert says what
+# broke. Silence, from a server that is down or a timer that stopped, is an
+# alert too: that is the switch's own job. This speaks the healthchecks.io ping
+# API, which a self-run Healthchecks speaks as well.
+set -u
+
+url=$(cat /etc/health-check.url) || exit 1
+problems=""
+fail() { problems="$problems$*
+"; }
+
+# Disk. Images and logs grow without asking (servers/vserver.md, "Disk"), and
+# a full disk fails a deploy, a database write, and a certificate renewal.
+full=$(df -P / /var/lib/docker |
+	awk 'NR > 1 && !seen[$1]++ { sub("%", "", $5); if ($5 + 0 >= 80) print $6 " is " $5 "% full" }')
+[ -z "$full" ] || fail "$full"
+
+# Every stack under /opt: each container running, and healthy where it has a
+# healthcheck. A stack with no container at all counts too: something stopped
+# it and nothing started it again.
+for dir in /opt/*/; do
+	[ -f "$dir/compose.yaml" ] || continue
+	stack=$(basename "$dir")
+	states=$(cd "$dir" && docker compose ps --all --format '{{.Service}} {{.State}} {{.Health}}' 2>&1) || {
+		fail "$stack: docker compose ps failed: $states"
+		continue
+	}
+	[ -n "$states" ] || { fail "$stack: no containers"; continue; }
+	bad=$(printf '%s\n' "$states" | awk '$2 != "running" || ($3 != "" && $3 != "healthy")')
+	[ -z "$bad" ] || fail "$stack: $bad"
+done
+
+# The host's own oneshot units: the per-address limits and the house's way
+# out. A unit that is enabled and not active failed on the last boot, and its
+# rules are missing.
+for unit in conn-limits wg-exit; do
+	systemctl is-enabled --quiet "$unit" 2> /dev/null || continue
+	systemctl is-active --quiet "$unit" || fail "$unit is enabled but not active"
+done
+
+# A reboot that has waited two days means the 04:00 reboot is not happening
+# (servers/vserver.md, "Updates and the nightly reboot").
+[ -z "$(find /run/reboot-required -mmin +2880 2> /dev/null)" ] ||
+	fail "a reboot has been waiting for more than two days"
+
+if [ -z "$problems" ]; then
+	curl -fsS -m 10 --retry 3 -o /dev/null "$url"
+else
+	printf '%s' "$problems" >&2
+	printf '%s' "$problems" | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$url/fail"
+fi

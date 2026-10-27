@@ -1,0 +1,9 @@
+[Unit]
+Description=Tell the dead man's switch whether the server is healthy
+After=docker.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/health-check

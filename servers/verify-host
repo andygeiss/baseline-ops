@@ -1,0 +1,78 @@
+#!/bin/sh
+# Checks the server against servers/vserver.md, and changes nothing. `make
+# verify-host` in this repository runs it over ssh, as root, from stdin, so it
+# never lands on the server. Every line it prints is one claim the document
+# makes, marked ok or FAIL, and any FAIL makes it exit 1.
+#
+#   verify-host <docker engine version> <docker compose version>
+#
+# The Makefile reads both versions from VERSIONS.md, so they live in one place.
+set -u
+
+engine=$1 compose=$2
+failures=0
+
+check() {
+	claim=$1
+	shift
+	if "$@" > /dev/null 2>&1; then
+		echo "ok    $claim"
+	else
+		echo "FAIL  $claim"
+		failures=$((failures + 1))
+	fi
+}
+
+sshd_says() { sshd -T | grep -qx "$1"; }
+
+# Reaching it: key-only. root logs in by key, because the make targets use it.
+check "sshd: password authentication off" sshd_says 'passwordauthentication no'
+check "sshd: keyboard-interactive off" sshd_says 'kbdinteractiveauthentication no'
+check "sshd: root by key only" sh -c 'sshd -T | grep -qxE "permitrootlogin (prohibit-password|without-password|no)"'
+
+# Tunnels from the house: the four settings of 10-tunnel.conf.
+check "sshd: GatewayPorts clientspecified" sshd_says 'gatewayports clientspecified'
+check "sshd: ClientAliveInterval 30" sshd_says 'clientaliveinterval 30'
+check "sshd: ClientAliveCountMax 3" sshd_says 'clientalivecountmax 3'
+check "sshd: no Unix socket forwarding" sshd_says 'allowstreamlocalforwarding no'
+
+# Membership in docker is root on this host, so it has exactly one member.
+check "docker group: andygeiss and nobody else" \
+	sh -c '[ "$(getent group docker | cut -d: -f4)" = andygeiss ]'
+
+# What is installed, at VERSIONS.md's versions.
+check "Docker Engine $engine" \
+	sh -c '[ "$(docker version --format "{{.Server.Version}}")" = "$1" ]' sh "$engine"
+check "Docker Compose $compose" \
+	sh -c '[ "v$(docker compose version --short)" = "$1" ]' sh "$compose"
+
+# Ports: only Caddy publishes one to the world. Every other published port is
+# on loopback, like Portainer's 9443.
+check "only caddy publishes a public port" sh -c '
+	! docker ps --format "{{.Names}} {{.Ports}}" |
+		grep -v "^caddy-caddy-1 " | grep -E "(0\.0\.0\.0|\[::\]|:::)[0-9]*:"'
+
+# Limits on what one address may open, and the house's way out.
+check "conn-limits active" systemctl is-active conn-limits
+check "conn-limits: connlimit and hashlimit in DOCKER-USER, IPv4" \
+	sh -c 'iptables -S DOCKER-USER | grep -q connlimit && iptables -S DOCKER-USER | grep -q hashlimit'
+check "conn-limits: connlimit and hashlimit in DOCKER-USER, IPv6" \
+	sh -c 'ip6tables -S DOCKER-USER | grep -q connlimit && ip6tables -S DOCKER-USER | grep -q hashlimit'
+check "wg-exit active" systemctl is-active wg-exit
+check "wg-exit: the house's NAT" sh -c 'iptables -t nat -S POSTROUTING | grep -q -- "-s 10.77.0.0/24 -o eth0 -j MASQUERADE"'
+check "wg-exit: the MSS clamp" sh -c 'iptables -t mangle -S FORWARD | grep -q TCPMSS'
+check "wg0 has a peer" sh -c 'wg show wg0 peers | grep -q .'
+
+# Updates and the nightly reboot.
+check "unattended-upgrades runs daily" sh -c 'apt-config dump | grep -qx "APT::Periodic::Unattended-Upgrade \"1\";"'
+check "auto-reboot at 04:00" sh -c 'apt-config dump | grep -qx "Unattended-Upgrade::Automatic-Reboot \"true\";" &&
+	apt-config dump | grep -qx "Unattended-Upgrade::Automatic-Reboot-Time \"04:00\";"'
+
+# How you find out, and the server's own state off the box.
+check "health-check timer active" systemctl is-active health-check.timer
+check "backup timer active" systemctl is-active backup.timer
+check "health-check.url and backup.env are 0400 root" sh -c '
+	[ "$(stat -c "%a %U" /etc/health-check.url)" = "400 root" ] &&
+	[ "$(stat -c "%a %U" /etc/backup.env)" = "400 root" ]'
+
+[ "$failures" -eq 0 ] || { echo "$failures failed"; exit 1; }
