@@ -142,10 +142,10 @@ so every new directory would ask again. And `claude-sandbox -p` cannot answer
 a sign-in prompt at all.
 
 Claude's own first-run setup would still ask, in every new directory: a theme
-picker, then a sign-in prompt that the token makes pointless. So the launcher
-marks that setup done in the directory's volume before Claude starts. Claude
-still asks once per directory whether you trust the folder. Answer with the
-arrow keys: the answer it starts on is "No, exit".
+picker, then a sign-in prompt that the token makes pointless, then whether you
+trust the folder. So the launcher marks that setup done in the directory's
+volume before Claude starts, and answers the trust question with yes: you chose
+the folder when you started the sandbox in it.
 
 The token lasts a year. When it runs out, run both commands again: `-U`
 replaces the old token in the keychain.
@@ -158,7 +158,7 @@ Run these after an install or an upgrade, in any directory under `~/workspace`:
 claude-sandbox --shell -c "ls -A $HOME"    # workspace: nothing else of your home
 claude-sandbox --shell -c 'ls ~/.claude/skills'    # engineering-baseline  engineering-operations
 claude-sandbox --shell -c 'touch ~/.claude/skills/engineering-baseline/x'    # Read-only file system
-claude-sandbox --shell -c 'jq .hasCompletedOnboarding ~/.claude.json'    # true: no first-run setup
+claude-sandbox --shell -c 'jq -c "[.hasCompletedOnboarding, .projects[\"$PWD\"].hasTrustDialogAccepted]" ~/.claude.json'    # [true,true]: no setup, no trust question
 claude-sandbox -p --output-format stream-json --verbose hi | jq -c 'select(.subtype == "init") | .skills | map(select(startswith("engineering-")))'    # both skills: Claude found them
 claude-sandbox --shell -c 'curl -s -o /dev/null -w "%{http_code}\n" https://example.com/'    # 200: a public site answered
 claude-sandbox --shell -c 'curl -sS https://192.168.1.1/'    # CONNECT tunnel failed, response 403
@@ -246,6 +246,10 @@ security delete-generic-password -s claude-sandbox
   agent one directory, but the Linux VM it runs in sees every project. An
   agent that broke out of the container, through a bug in podman or in the
   Linux kernel, would see them too — and nothing else of the Mac.
+- **The launcher answers Claude's trust question for you.** It says yes for
+  the folder you start in, so the project's own settings and hooks in
+  `.claude/` take effect without asking. They run inside the sandbox, like
+  everything else the agent runs.
 - **The agent reads the open web.** A page can carry instructions, and the
   agent may follow them: write something into the directory, or send your code
   to any public HTTPS site. egress keeps the agent off the Mac and your LAN. It
