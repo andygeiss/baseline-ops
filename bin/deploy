@@ -36,6 +36,13 @@ start() {
 	docker compose up -d --no-build --wait --wait-timeout 90 && healthy "$1"
 }
 
+# put_back undoes the swap: the old tree and the old compose.yaml are the ones
+# the next command reads again.
+put_back() {
+	if [ -d src.old ]; then rm -rf src && mv src.old src; fi
+	if [ -f compose.yaml.old ]; then mv compose.yaml.old compose.yaml; fi
+}
+
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> deploys.log; }
 
 remote() {
@@ -77,8 +84,7 @@ remote() {
 	# tree back and changes nothing else: a failed deploy is one that did not
 	# happen. --pull fetches the base images' patches under their minor tags.
 	if ! IMAGE_TAG=$version docker compose build --pull; then
-		rm -rf src && [ -d src.old ] && mv src.old src
-		[ -f compose.yaml.old ] && mv compose.yaml.old compose.yaml
+		put_back
 		log "deploy $version (was ${running:-nothing}) FAILED to build"
 		die "the build failed; ${running:-nothing} still runs"
 	fi
@@ -104,8 +110,10 @@ remote() {
 	fi
 
 	# The new version did not come up. Its image stays for a look; the old one
-	# starts again. The data is left as the new version left it — whether to
+	# starts again, under the compose.yaml it ran with, not the one the new
+	# version brought. The data is left as the new version left it — whether to
 	# put the snapshot back is a decision, runbooks/deploy.md.
+	put_back
 	if [ -n "$running" ] && start "$running"; then
 		log "deploy $version (was $running) FAILED, rolled back to $running${snapshot:+, snapshot $snapshot}"
 		die "$version did not come up healthy; $running runs again — docker compose logs app"

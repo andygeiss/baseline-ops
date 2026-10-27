@@ -38,7 +38,8 @@ v1.2.3`, or says what failed and what runs instead. What it does, in order:
    database and its WAL agree on.
 6. **Starts the new image** with `up --no-build --wait`, then asks `/healthz`
    whether it names the new version.
-7. **Rolls back by itself** when it does not: the old image starts again. The
+7. **Rolls back by itself** when it does not: the old image starts again,
+   under the old `compose.yaml`, with the old tree back in `src/`. The
    data stays as the new version left it — see *Putting the snapshot back*.
 8. **Appends one line** to `/opt/<app>/deploys.log`: when, what, what ran
    before, the outcome, the snapshot.
