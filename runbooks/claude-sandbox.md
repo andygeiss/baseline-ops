@@ -44,7 +44,9 @@ agent ──(network claude-sandbox: no gateway, no DNS)──▶ proxy ──(p
 - **The proxy** is egress, running as `nobody`. It lets a CONNECT to port 443
   through when the address it connects to is public. It checks that address
   after DNS, so a name that points into your LAN is refused like the address
-  itself. It stops when the session ends.
+  itself. It stops when the session ends. A launcher killed outright cannot
+  stop it, so the next `claude-sandbox` does, once that session's agent is
+  gone too.
 
 ## The skills it reads
 

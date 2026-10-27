@@ -63,6 +63,19 @@ fi
 podman network exists "$net" ||
 	podman network create --internal --disable-dns "$net" > /dev/null
 
+# A launcher killed outright, by kill -9 or a tool's timeout, never stops its
+# proxy, and egress runs until something does. So each start stops the proxies
+# whose session is over: their launcher is gone, and their agent too. One whose
+# agent still runs stays, or that agent would lose its only way out mid-task.
+podman ps --filter name=claude-sandbox-proxy- --format '{{.Names}}' |
+	while read -r old; do
+		pid=${old##*-}
+		case $pid in '' | *[!0-9]*) continue ;; esac
+		kill -0 "$pid" 2> /dev/null && continue
+		[ "$(podman container inspect --format '{{.State.Running}}' "claude-sandbox-$pid" 2> /dev/null)" = true ] && continue
+		podman stop --time 0 "$old" > /dev/null 2>&1 || true
+	done
+
 # The proxy is egress, the agent's only way out. It sits on both networks, lets
 # through HTTPS to public addresses and nothing else, and lives exactly as long
 # as this session. egress listens on loopback by default. The agent reaches it
