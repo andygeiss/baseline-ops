@@ -28,6 +28,12 @@ full=$(df -P / /var/lib/docker |
 for dir in /opt/*/; do
 	[ -f "$dir/compose.yaml" ] || continue
 	stack=$(basename "$dir")
+	# A deploy holds deploy.lock while it stops the app for its snapshot and
+	# waits for the new one to come up. That is the deploy's to judge, and it
+	# says so itself; the next run checks the stack again.
+	if [ -f "$dir/deploy.lock" ] && ! flock -n "$dir/deploy.lock" true; then
+		continue
+	fi
 	states=$(cd "$dir" && docker compose ps --all --format '{{.Service}} {{.State}} {{.Health}}' 2>&1) || {
 		fail "$stack: docker compose ps failed: $states"
 		continue

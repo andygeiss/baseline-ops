@@ -186,7 +186,8 @@ ping comes at all.
   `servers/health-check` and a systemd timer. It pings when every check
   passes. When one fails, it pings `/fail` with the reasons, so the alert says
   what broke. It checks that the root filesystem and `/var/lib/docker` are
-  below 80 %, and that every stack under `/opt` is running and healthy. It
+  below 80 %, and that every stack under `/opt` is running and healthy, except
+  one a deploy is in the middle of: that one waits for the next run. It
   checks that `conn-limits` and `wg-exit` are active if they are enabled. It
   also fails when a reboot has waited more than two days, which means the
   04:00 reboot is not happening. A server that is down, or did not come back
