@@ -60,30 +60,36 @@ make backup         # on the Mac you work on, any time: the server's own state, 
 make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
-None of these targets is an application's. `sshd-hardening`, `health-check`,
-`backup` and `verify-host` are the newest ones: [servers/vserver.md](servers/vserver.md),
-"Reaching it" and "How you find out", and [runbooks/restore.md](runbooks/restore.md),
-"Get the server's own state back", say what each one is for. Of the rest, two are the two sides of one
-tunnel — the server's sshd drop-in and the Mac's launchd agent (`make
-omlx-tunnel-stop` takes that one away again); [servers/vserver.md](servers/vserver.md),
-"Tunnels from the house", says why a house machine carries a service in over
-SSH, and who owns the command. The third caps what a single address may open on
-the public port, in the one chain a published Docker port cannot walk around —
-same document, "Limits on what one address may open". The fourth lets the
-server boot into the kernel and libc fixes it installs by itself — same
-document, "Updates and the nightly reboot". The last two carry the house's own
-traffic out to the internet, over a WireGuard tunnel the house's gateway opens:
-`wg-exit` sets up the server's side, and `wg-house` gives the gateway its key —
-same document, "The house's way out".
+None of these targets is an application's. Each is named below rather than
+counted, so a new one cannot make the list wrong:
 
-`backup` reads the server but keeps what it reads on the Mac you work on.
-That copy is the backup; nothing in the cloud holds one.
-
-The seventh sets up the Mac you work on, not a server: `make claude-sandbox`
-installs the sandbox Claude Code runs in there
-([runbooks/claude-sandbox.md](runbooks/claude-sandbox.md)). Unlike `make
-install`, it copies its files out of this checkout instead of linking them,
-because the agent inside the sandbox can edit the checkout.
+- `sshd-tunnel` and `omlx-tunnel` are the two sides of one tunnel — the
+  server's sshd drop-in and the Mac's launchd agent (`make omlx-tunnel-stop`
+  takes that one away again). [servers/vserver.md](servers/vserver.md),
+  "Tunnels from the house", says why a house machine carries a service in over
+  SSH, and who owns the command.
+- `sshd-hardening` turns password authentication off — same document,
+  "Reaching it".
+- `conn-limits` caps what a single address may open on the public port, in the
+  one chain a published Docker port cannot walk around — same document, "Limits
+  on what one address may open".
+- `auto-reboot` lets the server boot into the kernel and libc fixes it installs
+  by itself — same document, "Updates and the nightly reboot".
+- `wg-exit` and `wg-house` carry the house's own traffic out to the internet,
+  over a WireGuard tunnel the house's gateway opens: `wg-exit` sets up the
+  server's side, and `wg-house` gives the gateway its key — same document, "The
+  house's way out".
+- `health-check` and `verify-host` say whether the server is well and whether
+  it matches its document — same document, "How you find out".
+- `backup` reads the server but keeps what it reads on the Mac you work on.
+  That copy is the backup; nothing in the cloud holds one.
+  [runbooks/restore.md](runbooks/restore.md), "Get the server's own state
+  back", is the way back.
+- `claude-sandbox` sets up the Mac you work on, not a server: it installs the
+  sandbox Claude Code runs in there
+  ([runbooks/claude-sandbox.md](runbooks/claude-sandbox.md)). Unlike `make
+  install`, it copies its files out of this checkout instead of linking them,
+  because the agent inside the sandbox can edit the checkout.
 
 Two stacks are the server's own rather than an application's, and this
 repository deploys them: [`caddy/`](caddy/), the one proxy every application
@@ -109,7 +115,7 @@ baseline-ops/
 │   ├── claude-sandbox          ← the launcher: one session, two containers
 │   └── Containerfile           ← the image both containers run: Claude Code, egress as the proxy, and statusline
 ├── LICENSE                     ← MIT
-├── Makefile                    ← make install / make uninstall (Claude Code); make sshd-tunnel + make conn-limits + make auto-reboot + make wg-exit + make wg-house (server), make omlx-tunnel (house Mac), make backup + make claude-sandbox (the Mac you work on)
+├── Makefile                    ← make install / make uninstall (Claude Code), and the machine targets listed under "Server setup that runs from here"
 ├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
 │   └── compose.yaml
 ├── README.md                   ← you are here
