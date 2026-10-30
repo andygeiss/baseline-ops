@@ -6,7 +6,8 @@ name: claude-sandbox
 # checks what the sandbox counts on and nothing else would catch: the pinned
 # Claude Code, egress and statusline run, the agent is uid 1000, go test -race
 # works, egress lets a public host through and refuses a private address, the
-# status line command draws a line, and the managed settings start on Opus 5.5.
+# status line command draws a line, the managed settings start on Opus 5.5, and
+# the managed memory tells every session that the sandbox cannot push.
 # On its weekly run it also checks that the Claude Code pin is npm's latest.
 #
 # The launcher's own flags — the mounts, the internal network, the dropped
@@ -122,6 +123,11 @@ jobs:
           set -eu
           got=$(docker run --rm "$IMAGE" jq -r .model /etc/claude-code/managed-settings.json)
           [ "$got" = claude-opus-5-5 ] || { echo "want model claude-opus-5-5, got $got"; exit 1; }
+
+      # Every session reads the managed memory. Without it, an agent tries to
+      # push, which fails in the sandbox, instead of handing the push back.
+      - name: The managed memory says the sandbox cannot push
+        run: docker run --rm "$IMAGE" grep -F 'git push' /etc/claude-code/CLAUDE.md
 
       # The launcher maps your Mac user to uid 1000 (--userns keep-id), which is
       # what makes the agent's files yours. Under any other uid they belong to a

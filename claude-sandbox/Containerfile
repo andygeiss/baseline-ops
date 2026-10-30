@@ -49,6 +49,13 @@ COPY --from=statusline /go/bin/statusline /usr/local/bin/statusline
 RUN mkdir /etc/claude-code \
  && printf '{"model":"claude-opus-5-5","statusLine":{"type":"command","command":"/usr/local/bin/statusline"}}\n' > /etc/claude-code/managed-settings.json
 
+# /etc/claude-code/CLAUDE.md is the managed memory: every session reads it,
+# whatever the project and whichever skills it loads. It tells the agent that
+# the sandbox cannot push, so it commits and hands the push back to you. Named
+# instructions.md here, so a session working on this repository does not take
+# it for this directory's own CLAUDE.md.
+COPY instructions.md /etc/claude-code/CLAUDE.md
+
 # uid 1000 is the one the launcher maps your Mac user to (--userns keep-id),
 # so a file the agent writes in the project belongs to you on the Mac.
 RUN useradd --create-home --uid 1000 --shell /bin/bash agent

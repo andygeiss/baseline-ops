@@ -27,6 +27,7 @@ claude-sandbox --shell                          # a shell in the same sandbox, t
 | Any public HTTPS site, through the proxy: what `curl` and WebFetch fetch. WebSearch too, which runs on Anthropic's side. | A private address, whatever name points at it: the Mac's own services, your LAN, the podman machine. Plain HTTP, ports other than 443, and DNS. |
 | | Root, a Linux capability, or a write outside its home, the directory, and `/tmp`. |
 | | claude.ai connectors, which reach your mail and your files, or publishing pages to claude.ai. The image turns both off. |
+| | A git remote. The sandbox holds no GitHub login, no SSH key, and no `gh`, so `git push` fails. The agent commits, and you push from the Mac. The image's `/etc/claude-code/CLAUDE.md`, from [`claude-sandbox/instructions.md`](../claude-sandbox/instructions.md), tells every session so. |
 
 ## How a session runs
 

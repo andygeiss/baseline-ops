@@ -214,6 +214,7 @@ claude-sandbox:
 	sh -n claude-sandbox/claude-sandbox
 	mkdir -p '$(SANDBOX_DIR)' '$(HOME)/.local/bin'
 	install -m 0644 claude-sandbox/Containerfile '$(SANDBOX_DIR)/'
+	install -m 0644 claude-sandbox/instructions.md '$(SANDBOX_DIR)/'
 	install -m 0755 claude-sandbox/claude-sandbox '$(SANDBOX_DIR)/'
 	ln -sf '$(SANDBOX_DIR)/claude-sandbox' '$(HOME)/.local/bin/claude-sandbox'
 	v=$$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' claude-sandbox/Containerfile) && podman --connection $(SANDBOX_CONN) build --pull -t "localhost/claude-sandbox:$$v" '$(SANDBOX_DIR)' && podman --connection $(SANDBOX_CONN) run --rm "localhost/claude-sandbox:$$v" claude --version
