@@ -28,7 +28,7 @@ None of them reaches the server.
 
 | Component | Pinned version | Released | Notes |
 |---|---|---|---|
-| Claude Code | **2.1.310** | 2026-10-23 | `ARG CLAUDE_CODE_VERSION` in `claude-sandbox/Containerfile`. Exact, like the server's own stacks: what the agent can do changes only through an edit someone reads. The image never updates itself. |
+| Claude Code | **2.1.316** | 2026-10-31 | `ARG CLAUDE_CODE_VERSION` in `claude-sandbox/Containerfile`. Exact, like the server's own stacks: what the agent can do changes only through an edit someone reads. The image never updates itself. |
 | egress | **v0.1.1** | 2026-10-27 | `ARG EGRESS_VERSION` in `claude-sandbox/Containerfile`: the proxy, HTTPS to public addresses and nothing else. Exact, like Claude Code: what the agent can reach changes only through an edit someone reads. Never v0.1.0: it is retracted, because a CONNECT to `[::%en0]:443` reached the machine itself. |
 | `golang` base image | **1.27-trixie** | 1.27.3, 2026-10-19 | The sandbox image, and the stages that build egress and statusline. Debian, not alpine: the commands an agent writes assume GNU tools and glibc. Minor tag; `make claude-sandbox` builds with `--pull`, so Go's and Debian's patches arrive with the next run. |
 | `node` base image | **24-trixie-slim** | 24.22.1, 2026-10-20 | The install stage only: npm picks Claude Code's native binary for the platform. Nothing of Node reaches the sandbox. |
@@ -88,8 +88,10 @@ None of them reaches the server.
 ## Sources checked for the sandbox (2026-10-25)
 
 - Claude Code: https://www.npmjs.com/package/@anthropic-ai/claude-code — the
-  registry's `time` field dates each release — and
-  https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md
+  registry's `time` field dates each release, and
+  https://registry.npmjs.org/@anthropic-ai/claude-code/latest names the
+  newest — and https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md
+  (checked 2026-10-30)
 - egress: https://github.com/andygeiss/egress/tags, and
   `go list -m -json github.com/andygeiss/egress@latest`, which names the
   version the Go module proxy serves and dates it (checked 2026-10-27)

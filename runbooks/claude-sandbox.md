@@ -210,6 +210,10 @@ the way Claude Code's npm package ships its binary. The run names the check
 that failed. Fix it here before your next `make claude-sandbox`, which would
 build the same broken image.
 
+The Tuesday run also turns red while `ARG CLAUDE_CODE_VERSION` is behind npm's
+latest release, and names that release. That is the reminder to upgrade, above:
+the image still builds, it is only behind.
+
 ## Start a directory over, or remove the sandbox
 
 A directory's volume holds its settings and sessions. Remove the volume, and
@@ -225,7 +229,7 @@ To remove the whole sandbox, remove those volumes, then:
 ```sh
 rm ~/.local/bin/claude-sandbox
 rm -r ~/.local/share/claude-sandbox
-podman --connection podman-machine-default rmi localhost/claude-sandbox:2.1.310
+podman --connection podman-machine-default rmi $(podman --connection podman-machine-default images -q localhost/claude-sandbox)
 podman --connection podman-machine-default network rm claude-sandbox
 security delete-generic-password -s claude-sandbox
 ```

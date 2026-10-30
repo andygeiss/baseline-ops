@@ -198,7 +198,9 @@ copied here, so the two cannot drift.
 
 It runs on every change to `claude-sandbox/`, and every Tuesday:
 `golang:1.27-trixie`, `node:24-trixie-slim`, and Debian's packages move under
-their tags. The launcher's own flags — the mounts, the network, the dropped
+their tags. The Tuesday run also fails while the Claude Code pin is behind
+npm's latest release, so the sandbox's Claude Code does not fall behind
+unnoticed. The launcher's own flags — the mounts, the network, the dropped
 capabilities — need the Mac's podman machine, so
 [runbooks/claude-sandbox.md](runbooks/claude-sandbox.md), "Check that it
 holds", covers them by hand.

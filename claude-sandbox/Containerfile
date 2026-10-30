@@ -7,7 +7,7 @@
 # what picks the right one. Node is needed for that step alone, so it stays in
 # this stage and never reaches the sandbox.
 FROM docker.io/library/node:24-trixie-slim AS claude
-ARG CLAUDE_CODE_VERSION=2.1.310
+ARG CLAUDE_CODE_VERSION=2.1.316
 RUN npm install --global --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && cp "$(npm root --global)/@anthropic-ai/claude-code/bin/claude.exe" /claude
 
