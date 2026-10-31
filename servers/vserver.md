@@ -135,18 +135,10 @@ owning it.
 | wireguard-tools | The `wg` command: makes WireGuard keys, and shows the tunnel | From Ubuntu's archive, so unattended-upgrades patches it. The tunnel itself is the kernel's, and systemd-networkd brings it up, so it runs no service of its own — "The house's way out". |
 | nothing else | — | No Caddy on the host, no Go toolchain, no nginx, no certbot. Caddy is a container; Go runs inside the build stage. A package installed on the host is a package that drifts. |
 
-Portainer is installed, for a look at what is running — its own stack in
-`/opt/portainer`, from this repository's `portainer/`
-([runbooks/portainer.md](../runbooks/portainer.md)). It mounts the Docker
-socket, which is root, so whoever logs in to it is root on this host. That is
-why only the house gets through to its login. It sits behind the proxy at
-`https://portainer.ai-at-home.de`, and the proxy answers `403` to every
-request that does not come from `10.77.0.2`, the house's end of wg0. A request
-from `KNOPPERS` or the Mac Studio to this server rides wg0 like any other
-("The house's way out"), so it comes from that address. Portainer also
-publishes one port, `127.0.0.1:9443`, for the SSH-tunnel path
-(`ssh -L 9443:127.0.0.1:9443 andygeiss@vserver`), the way in from anywhere
-else. The password is long, and the socket itself is never published.
+No container mounts the Docker socket, and nothing puts Docker behind a login.
+Portainer did, until 2026-10-31, and was removed: whoever logged in to it was
+root on this host, and `ssh andygeiss@vserver docker compose ls` answers the
+same question with nothing to attack.
 
 ## Updates and the nightly reboot
 
@@ -405,8 +397,7 @@ of its settings decide whether anything goes round the tunnel:
 - **The sites' address is the house's now, too.** An abuse report about
   something done on `KNOPPERS` reaches netcup, and then you.
 - **Root here sees where the house connects.** Whoever takes this server sees
-  it too. Portainer's login would hand root over, so it answers only the house
-  ("What is installed").
+  it too. So no login on it hands root over ("What is installed").
 - **A reboot at 04:00** ("Updates and the nightly reboot") takes `KNOPPERS`
   offline for the same minute as the sites.
 - **ssh from `KNOPPERS` rides the tunnel too.** sshd sees `10.77.0.2`, and a
@@ -462,8 +453,6 @@ The proxy has a directory of its own, not owned by any application:
 ├── Caddyfile         ← from this repository's caddy/; overwritten by every proxy upgrade
 ├── compose.yaml      ← from this repository's caddy/; overwritten by every proxy upgrade
 └── sites/            ← one <app>.caddy per application: its domain and its alias; server-owned
-/opt/portainer/
-└── compose.yaml      ← from this repository's portainer/; its data is the volume portainer_data
 ```
 
 A static page is an application without a build, so its directory holds the

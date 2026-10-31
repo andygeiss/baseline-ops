@@ -17,7 +17,6 @@ code rather than the server.
 | Docker Engine | **29.9.1** | 2026-10-14 | On the server only — it builds and runs everything. Install from Docker's own repository, never the distribution package. |
 | `golang` base image | **1.27-alpine** | 1.27.3, 2026-10-19 | Build stage only. Minor tag, so it follows the baseline's Go patch pin without a second place to update. Ships **no git**, which the build stage installs — the version stamp depends on it. |
 | Litestream image | **0.5** | 0.5.17, 2026-08-31 | Opt-in backup sidecar — see [runbooks/restore.md](runbooks/restore.md). |
-| Portainer CE | **2.45.2** | 2026-10-08 | Optional, and the LTS line: 2.45 is the LTS that rolled up the 2.40–2.44 STS releases, supported to May 2027; 2.39 LTS ends Nov 2026. The next LTS, 3.3, is planned for December 2026: a new major. Behind the proxy, one loopback port — [runbooks/portainer.md](runbooks/portainer.md). |
 | wireguard-tools | **1.0.20250521** | 2025-05-21 | On the server only: the `wg` command, for the house's tunnel — [servers/vserver.md](servers/vserver.md), "The house's way out". Ubuntu 26.04's own package, `-1ubuntu1`, so unattended-upgrades moves it, not an edit here. |
 
 ## The agent sandbox on the Mac you work on
@@ -41,9 +40,8 @@ None of them reaches the server.
   `golang:1.27-alpine`). Every deploy builds with `--pull`, so its security
   patches arrive with the next deploy, and a new major never lands
   unannounced.
-- **The server's own stacks are pinned to the exact version**
-  (`caddy:2.11.7-alpine`, and Portainer's). Nothing pulls them except their
-  runbook's "Upgrade", so a minor tag buys no patches there. It only lets a
+- **The server's own stack is pinned to the exact version**
+  (`caddy:2.11.7-alpine`). Nothing pulls it except its runbook's "Upgrade", so a minor tag buys no patches there. It only lets a
   `docker compose pull` take a release nobody read, and Caddy 2.11.6 put
   breaking changes into a patch release. On the exact tag, every move is an
   edit someone reads.
@@ -78,10 +76,6 @@ None of them reaches the server.
   which tools the build stage actually has
 - Litestream: https://github.com/benbjohnson/litestream/releases and
   https://hub.docker.com/r/litestream/litestream/tags
-- Portainer: https://hub.docker.com/r/portainer/portainer-ce/tags — the `lts` and
-  `sts` tags name the two lines; read the version behind `lts`, do not deploy the
-  moving tag. Which line is which, and until when:
-  https://docs.portainer.io/start/lifecycle (checked 2026-10-18)
 - wireguard-tools: `apt-cache policy wireguard-tools` on vserver, which names
   what Ubuntu's archive offers
 

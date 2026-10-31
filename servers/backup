@@ -11,10 +11,8 @@ cd / || exit 1
 # What each one is, and what losing it costs: runbooks/restore.md, "Get the
 # server's own state back". /opt holds every server-owned file — site files,
 # secrets, site.env, litestream.yml, each .env — but not what a deploy writes
-# again, and not the snapshots, which the data below replaces. Portainer is
-# optional, so its volume is taken only when it is there.
+# again, and not the snapshots, which the data below replaces.
 set -- opt etc/systemd/network var/lib/docker/volumes/caddy_caddy_data
-[ -d var/lib/docker/volumes/portainer_data ] && set -- "$@" var/lib/docker/volumes/portainer_data
 
 # Each application's data, copied cold, as a deploy's snapshot is: stopped, so
 # the database and its WAL are one consistent state. An application is what
@@ -43,21 +41,9 @@ for dir in /opt/*/; do
 done
 [ "$apps_failed" -eq 0 ] || exit 1
 
-# Portainer's database is one bolt file, and a copy taken while it writes may
-# not open. It is stopped for the seconds the copy takes. Every other volume
-# here is written rarely: Caddy's certificates, once in sixty days per site.
-portainer_was_running=false
-if [ "$(docker inspect -f '{{.State.Running}}' portainer-portainer-1 2> /dev/null)" = true ]; then
-	portainer_was_running=true
-	docker stop portainer-portainer-1 > /dev/null
-fi
-
+# Caddy's volume is copied while it runs: it writes rarely, its certificates
+# once in sixty days per site.
 tar -czf - --one-file-system \
 	--exclude='opt/*/src' --exclude='opt/*/src.old' --exclude='opt/*/src.new' \
 	--exclude='opt/*/incoming' --exclude='opt/*/snapshots' --exclude='opt/containerd' \
 	"$@" --transform="s,^${data#/},data," "${data#/}"
-status=$?
-
-[ "$portainer_was_running" = false ] || docker start portainer-portainer-1 > /dev/null
-
-exit "$status"

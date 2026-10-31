@@ -92,11 +92,9 @@ counted, so a new one cannot make the list wrong:
   install`, it copies its files out of this checkout instead of linking them,
   because the agent inside the sandbox can edit the checkout.
 
-Two stacks are the server's own rather than an application's, and this
-repository deploys them: [`caddy/`](caddy/), the one proxy every application
-sits behind ([runbooks/caddy.md](runbooks/caddy.md)), and
-[`portainer/`](portainer/), the optional look at what is running
-([runbooks/portainer.md](runbooks/portainer.md)). Neither has a `make` target
+One stack is the server's own rather than an application's, and this
+repository deploys it: [`caddy/`](caddy/), the one proxy every application
+sits behind ([runbooks/caddy.md](runbooks/caddy.md)). It has no `make` target
 yet — the steps have not run twice.
 
 ## Repository structure
@@ -117,8 +115,6 @@ baseline-ops/
 │   └── Containerfile           ← the image both containers run: Claude Code, egress as the proxy, and statusline
 ├── LICENSE                     ← MIT
 ├── Makefile                    ← make install / make uninstall (Claude Code), and the machine targets listed under "Server setup that runs from here"
-├── portainer/                  ← the optional look at what is running; the server's own stack, like caddy/
-│   └── compose.yaml
 ├── README.md                   ← you are here
 ├── runbooks/                   ← procedures, in the order you run them
 │   ├── caddy.md                ← install the proxy; add or remove a site; upgrade it
@@ -126,7 +122,6 @@ baseline-ops/
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time
-│   ├── portainer.md            ← install Portainer behind the proxy; reach it; upgrade it
 │   └── restore.md              ← get the data back
 ├── servers/
 │   ├── backup                  ← the server's own state and the apps' data as one tar.gz; make backup keeps it on the Mac
@@ -171,9 +166,9 @@ manual. The weekly run is the one that earns its keep — `alpine:3.24` and
 `golang:1.27-alpine` are minor tags, so what they name changes under a template
 nobody edited.
 
-**`compose.yaml`, `caddy/`, `portainer/`, and the shell scripts are checked,
-not run.** [`.github/workflows/checks.yml`](.github/workflows/checks.yml) runs
-`docker compose config` on the three compose files and `caddy validate` on the
+**`compose.yaml`, `caddy/`, and the shell scripts are checked, not run.**
+[`.github/workflows/checks.yml`](.github/workflows/checks.yml) runs
+`docker compose config` on the two compose files and `caddy validate` on the
 Caddyfile, with one site per snippet. It also runs shellcheck on every
 `#!/bin/sh` file. The context each check invents, such as an image tag, an
 empty secret, or an example domain, is written inline in the workflow. Whether

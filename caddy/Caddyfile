@@ -21,11 +21,10 @@
 #     }
 #
 # A site only the house may open imports `house-only`, and names its upstream,
-# host and port. Portainer is the one such site, and it is not built on the
-# template, so it answers on a port of its own:
+# host and port. No site imports it today:
 #
-#     portainer.example.com {
-#     	import house-only portainer:9000
+#     admin.example.com {
+#     	import house-only admin:8080
 #     }
 
 # What a flood costs before Caddy can refuse it. read_header hangs up on a
@@ -108,8 +107,7 @@
 	}
 }
 
-# A site only the house may open, such as Portainer, whose login is root on
-# this host. A request from the house rides wg0 and arrives from the house's
+# A site only the house may open. A request from the house rides wg0 and arrives from the house's
 # end of it, 10.77.0.2 — servers/vserver.md, "The house's way out". That is
 # the address servers/wg-house gives the gateway, and the two change together.
 # {args[0]} is the upstream, host and port.

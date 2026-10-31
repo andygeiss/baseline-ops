@@ -47,7 +47,7 @@ Checks for the timer to run, each one pinging only on success:
 
 - [ ] disk: root filesystem and `/var/lib/docker` below 80 %
 - [ ] every application container `healthy` (`docker compose ps` per `/opt/*`)
-- [ ] the server's own stacks running: caddy, portainer
+- [ ] the server's own stack running: caddy
 - [ ] the iptables rules from `conn-limits` and `wg-exit` present
 - [ ] `/var/run/reboot-required` older than two days, which means the
       automatic reboot is not happening
@@ -99,7 +99,6 @@ Two separate things are at risk.
 | site files | `/opt/caddy/sites/*.caddy` | every domain, rewritten from memory |
 | application secrets, `site.env`, `litestream.yml` | `/opt/<app>/` | every credential reissued |
 | wg0's key | `/etc/systemd/network/wg0.key` | the house reconfigured; `make wg-house` again |
-| Portainer's admin user and settings | volume `portainer_data` | set up again |
 | certificates and the ACME account | volume `caddy_data` | Caddy fetches them again; rate limits if many at once |
 
 - [x] `servers/backup`: one tar.gz of the table above, written to stdout.
@@ -126,7 +125,7 @@ machine agrees.
   - Docker Engine and Compose at VERSIONS.md's versions
   - the DOCKER-USER, nat and mangle rules that `conn-limits` and `wg-exit` add
   - `52auto-reboot` present, and unattended-upgrades enabled
-  - published ports: only Caddy's 80/443 and Portainer's loopback 9443
+  - published ports: only Caddy's 80/443 to the world; any other on loopback
 - [x] `make sshd-hardening`: the one `MUST` with no target behind it, password
       authentication off, as a drop-in like `10-tunnel.conf`
 - [ ] `runbooks/rebuild.md`: a new VPS to serving every site, in order. It
@@ -148,9 +147,9 @@ Most of it does not:
 - [x] `caddy validate` on `caddy/Caddyfile` with an empty `sites/` directory,
       plus one example site per snippet (`site`, `tunnel`, `house-only`) taken
       from the Caddyfile's own header comment
-- [x] `docker compose config` on `templates/compose.yaml`, `caddy/compose.yaml`,
-      and `portainer/compose.yaml`. `IMAGE_TAG` and an empty secrets file are
-      all they need
+- [x] `docker compose config` on `templates/compose.yaml` and
+      `caddy/compose.yaml`. `IMAGE_TAG` and an empty secrets file are all they
+      need
 - [x] shellcheck (`-s sh`) on `bin/deploy`, `claude-sandbox/claude-sandbox`, and
       `servers/*`
 - [x] pin `actions/checkout` by commit SHA, with Dependabot for
@@ -181,10 +180,10 @@ Portainer puts the Docker socket, which is root, behind a login on the
 internet-facing machine. Its guards are sound and documented. Still, `ssh
 vserver docker compose ls` answers the same question with nothing installed.
 
-- [ ] Decide: remove it, keep it as is, or put a read-only socket proxy in
-      front of it
-- [ ] Whatever the decision is, write it down in `servers/vserver.md`, "What is
-      installed"
+- [x] Decide: removed, 2026-10-31. `ssh vserver docker compose ls` gives the
+      same answer with nothing to attack, and verify-host and backup have less
+      to cover
+- [x] Write it down in `servers/vserver.md`, "What is installed"
 
 **Done when:** the decision and its reason are on file.
 

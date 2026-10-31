@@ -44,7 +44,7 @@ jobs:
           sites=$(mktemp -d)
           printf 'todo.example.com {\n\timport site todo\n}\n' > "$sites/todo.caddy"
           printf 'omlx.example.com {\n\timport tunnel 18000\n}\n' > "$sites/omlx.caddy"
-          printf 'portainer.example.com {\n\timport house-only portainer:9000\n}\n' > "$sites/portainer.caddy"
+          printf 'admin.example.com {\n\timport house-only admin:8080\n}\n' > "$sites/admin.caddy"
           docker run --rm \
             -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             -v "$sites:/etc/caddy/sites:ro" \
@@ -67,4 +67,3 @@ jobs:
           echo IMAGE_TAG=v0.0.0 > "$app/.env"
           (cd "$app" && docker compose config --quiet)
           docker compose -f caddy/compose.yaml config --quiet
-          docker compose -f portainer/compose.yaml config --quiet

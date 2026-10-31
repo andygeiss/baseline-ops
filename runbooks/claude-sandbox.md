@@ -266,6 +266,5 @@ security delete-generic-password -s claude-sandbox
 - **On `KNOPPERS`, the agent gets as far as what only the house may open.**
   egress judges the address, not who is asking. A Mac on `KNOPPERS` reaches
   vserver through the house's tunnel, from `10.77.0.2`, the one address a
-  `house-only` site lets in. So the agent can open Portainer's login page, and
-  the password is all that stands between it and root on vserver
-  ([runbooks/portainer.md](portainer.md)).
+  `house-only` site lets in. So the agent can open any such site, and whatever
+  login it has is all that stands in the way. No site is `house-only` today.

@@ -108,7 +108,6 @@ nothing is installed on the server for it.
 | site files | `/opt/caddy/sites/*.caddy` | every domain, written again from memory |
 | secrets, `site.env`, `litestream.yml`, `.env` | `/opt/<app>/` | every credential issued again |
 | wg0's key, and the house's peer | `/etc/systemd/network/` | the house set up again: `make wg-house` |
-| Portainer's admin user and settings | volume `portainer_data` | Portainer set up again |
 | certificates and the ACME account | volume `caddy_caddy_data` | Caddy asks for them again, and many at once meets Let's Encrypt's rate limits |
 | each application's data | volume `<app>_data`, as `data/<app>/` | the users' data, since the last `make backup` |
 

@@ -46,8 +46,8 @@ check "Docker Engine $engine" \
 check "Docker Compose $compose" \
 	sh -c '[ "v$(docker compose version --short)" = "$1" ]' sh "$compose"
 
-# Ports: only Caddy publishes one to the world. Every other published port is
-# on loopback, like Portainer's 9443.
+# Ports: only Caddy publishes one to the world. Any other published port is on
+# loopback.
 check "only caddy publishes a public port" sh -c '
 	! docker ps --format "{{.Names}} {{.Ports}}" |
 		grep -v "^caddy-caddy-1 " | grep -E "(0\.0\.0\.0|\[::\]|:::)[0-9]*:"'

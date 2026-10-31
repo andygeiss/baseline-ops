@@ -51,9 +51,15 @@ changes: the policy every site shares (compression, the upstream port) is the
 and an alias.
 
 A site only the house may open imports `house-only` instead, and names its
-upstream, host and port. The snippet answers `403` to every request that does
-not come from the house's end of wg0 — [portainer.md](portainer.md) has the
-one example, and says why.
+upstream, host and port. No site does today. The snippet answers `403` to
+every request that does not come from `10.77.0.2`, the house's end of wg0
+([vserver.md](../servers/vserver.md), "The house's way out"). `KNOPPERS` and
+the Mac Studio reach this server only through that tunnel, so the gateway's
+route decides who gets in. A device on `SCHNIPOSA` takes the house's own line,
+which is behind CGNAT, so its address is shared with strangers and cannot be
+let in. Neither can Apple's: Safari with iCloud Private Relay gets the `403`
+even on `KNOPPERS`, so turn off "Limit IP address tracking" for the
+`KNOPPERS` Wi-Fi on that device, or use another browser.
 
 `validate` runs first so a typo never reaches the running proxy. `reload` swaps
 the configuration without dropping a connection; the other sites never notice.
@@ -221,7 +227,7 @@ saves by renaming, leaves the container reading the old one.
 |---|---|---|
 | `502` on one site | The upstream is unreachable: the app is not on `web`, or the alias in the site file is not the alias in the app's `compose.yaml` | `docker network inspect web` lists who is on it and under which names |
 | `502` on a tunnelled site | The house machine's `ssh -R` is gone: the Mac Studio is off or nobody is logged in, or the house's WireGuard tunnel is down and took the `ssh -R` with it. A minute at 04:00 is the server rebooting ([vserver.md](../servers/vserver.md), "Tunnels from the house") | `ss -lntp \| grep 18000` on the server says whether the tunnel is still bound, and `wg show wg0`, as root, whether the house is connected; `make omlx-tunnel` on the Studio opens it again |
-| `403` on a house-only site | The request did not come out of wg0 from the house's end. Away from `KNOPPERS`, that is the point. On `KNOPPERS`, the usual cause is Safari with iCloud Private Relay, which sends the request through Apple's relays. Rarer: the gateway's route, or its kill switch, let the device out by the house's own line | `ipconfig getifaddr en0` prints `192.168.69.…` on `KNOPPERS`. Safari's Web Inspector shows `(Proxy)` after the address when the relay carried the request: [portainer.md](portainer.md) says how to turn it off for `KNOPPERS`. From anywhere else, take the SSH tunnel in portainer.md, "Reach it from outside the house" |
+| `403` on a house-only site | The request did not come out of wg0 from the house's end. Away from `KNOPPERS`, that is the point. On `KNOPPERS`, the usual cause is Safari with iCloud Private Relay, which sends the request through Apple's relays. Rarer: the gateway's route, or its kill switch, let the device out by the house's own line | `ipconfig getifaddr en0` prints `192.168.69.…` on `KNOPPERS`. Safari's Web Inspector shows `(Proxy)` after the address when the relay carried the request: "Add a site" says how to turn it off for `KNOPPERS`. From anywhere else, an SSH tunnel to the upstream's loopback port is the way in |
 | `401` on a tunnelled site, with a key you know is good | The client is not sending `Authorization: Bearer <key>` — the proxy turns away anything that is not a bearer token, before the service sees it | `curl -v` shows the header the client actually sent; the scheme may be any case, but the token MUST follow it |
 | `validate` fails | A site file with a typo, or two files claiming one domain | The message names the file and line; fix it, then reload |
 | A site answers with the wrong certificate, or a self-signed one | The domain in the site file does not resolve to this server, so Let's Encrypt refused | `dig +short <domain>`; fix DNS, then `reload` |
