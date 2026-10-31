@@ -129,7 +129,7 @@ machine agrees.
   - published ports: only Caddy's 80/443 to the world; any other on loopback
 - [x] `make sshd-hardening`: the one `MUST` with no target behind it, password
       authentication off, as a drop-in like `10-tunnel.conf`
-- [ ] `runbooks/rebuild.md`: a new VPS to serving every site, in order. It
+- [x] `runbooks/rebuild.md`: a new VPS to serving every site, in order. It
       covers Docker from Docker's repository, the account, the make targets,
       caddy, then each app from phase 2's backup. It ends with `make
       verify-host`. Steps that have no target yet stay prose until they have

@@ -122,6 +122,7 @@ baseline-ops/
 │   ├── deploy.md               ← ship a tagged release; roll one back
 │   ├── host.md                 ← patch the host and reboot it by hand; check it after any reboot
 │   ├── new-app.md              ← put an application on the server the first time
+│   ├── rebuild.md              ← a new server from the newest backup, when the old one is lost
 │   └── restore.md              ← get the data back
 ├── servers/
 │   ├── backup                  ← the server's own state and the apps' data as one tar.gz; make backup keeps it on the Mac

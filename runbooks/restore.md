@@ -148,7 +148,8 @@ secrets.
 
 ### Restore for real
 
-On a server that lost its disk: rebuild it far enough to run Docker. Copy the
+On a server that lost its disk, follow [rebuild.md](rebuild.md) instead: it
+puts back all of it, in order. For one file on a server that still runs, copy the
 archive over and unpack it into a scratch directory, never over `/`:
 
 ```sh
