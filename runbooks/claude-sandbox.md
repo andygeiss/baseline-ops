@@ -104,6 +104,11 @@ podman machine ssh ls -A "$HOME"            # workspace: nothing else of your ho
 only one shared. `--rootful` keeps the machine's default connection rootful;
 the sandbox uses the rootless one either way.
 
+The machine keeps podman's default 2 GB of memory, and a big Go package does
+not compile in it with Go's defaults: a database driver failed at two
+versions. `GOGC=20 go build -p 1` builds it, one package at a time, with the
+garbage collector running more often.
+
 Rosetta goes with `~/.config/containers`: podman 6.1 switches it on through
 that folder and has no flag for it. amd64 images still run, through QEMU, only
 slower. Every image the sandbox and the templates use has an arm64 build.
