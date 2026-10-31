@@ -197,6 +197,46 @@ a file on this machine, mode `0400`, in "Secrets" below. Write it once, before
 ssh root@vserver 'umask 077 && cat > /etc/health-check.url'   # paste the URL, then ctrl-d
 ```
 
+**The backup has a check of its own**, on the same service, with a period of
+one day and a grace of a few hours. The Mac pings it after each nightly `make
+backup-daily` run, and pings `/fail` with the reasons when a run fails. A Mac
+that was off or asleep for a whole day sends nothing, and that is an alert
+too: the backup is a day old. Its URL lives on the Mac, not here —
+[runbooks/restore.md](../runbooks/restore.md), "Get the server's own state
+back".
+
+### Test that it alerts
+
+A check that has never fired is a belief. Run each of these once, at a quiet
+hour, and wait for the alert before you undo it. Each should arrive within ten
+minutes, except the silent ones, which arrive after the check's period and
+grace.
+
+```sh
+# 1. The proxy down. Every site is down until you undo it; the outside check
+#    fires too. The next run pings /fail and names caddy.
+ssh root@vserver 'cd /opt/caddy && docker compose stop'
+ssh root@vserver 'cd /opt/caddy && docker compose start'      # after the alert
+
+# 2. The disk past 80 %. df counts Use% against used + available, not the
+#    disk's size, so the scratch file is sized the same way.
+ssh root@vserver 'n=$(df -Pk / | awk "NR == 2 { print int((\$3 + \$4) * 0.81 - \$3) + 1 }") &&
+	[ "$n" -gt 0 ] && fallocate -l $((n * 1024)) /root/fill && df -P /'
+ssh root@vserver 'rm -f /root/fill && df -P /'                # after the alert
+
+# 3. Silence: no timer, no ping. Alerts after the period and its grace.
+ssh root@vserver 'systemctl stop health-check.timer'
+ssh root@vserver 'systemctl start health-check.timer'         # after the alert
+
+# 4. The backup fails. On the Mac: a host that does not exist pings /fail.
+make backup ROOT=root@vserver.invalid
+```
+
+Write down when you ran them, and what arrived, under "Last tested" below.
+Test them again after you change the service, the URL, or the script.
+
+**Last tested:** never.
+
 `make verify-host` is the third kind of check: run by hand, it compares the
 machine with this document and changes nothing.
 

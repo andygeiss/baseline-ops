@@ -3,7 +3,7 @@
 # rest set up or check a machine rather than build anything: `sshd-hardening`,
 # `sshd-tunnel`, `conn-limits`, `auto-reboot`, `wg-exit`, `wg-house`,
 # `health-check` and `verify-host` on the server, `omlx-tunnel` on the house
-# machine, `backup` and `claude-sandbox` on the Mac you work on —
+# machine, `backup`, `backup-daily` and `claude-sandbox` on the Mac you work on —
 # each a line that must be typed exactly, so it is not typed. `install` is the
 # first target: a bare `make` installs.
 
@@ -14,7 +14,7 @@ SKILL_DIR = $(HOME)/.claude/skills/engineering-operations
 # make sshd-tunnel ROOT=root@other-host
 ROOT = root@vserver
 
-.PHONY: auto-reboot backup claude-sandbox conn-limits health-check install omlx-tunnel omlx-tunnel-stop sshd-hardening sshd-tunnel uninstall verify-host wg-exit wg-house
+.PHONY: auto-reboot backup backup-daily backup-daily-stop claude-sandbox conn-limits health-check install omlx-tunnel omlx-tunnel-stop sshd-hardening sshd-tunnel uninstall verify-host wg-exit wg-house
 
 # Symlink, not copy: the repo stays the single source of truth and
 # `git pull` is the update mechanism. Neither target ever removes anything
@@ -129,26 +129,47 @@ health-check:
 	ssh $(ROOT) 'systemctl daemon-reload && systemctl enable --now health-check.timer && systemctl start health-check.service && journalctl -u health-check.service -n 10 --no-pager && systemctl list-timers health-check.timer'
 
 # The server's own state and each application's data, onto this Mac, as one
-# dated tar.gz in $(BACKUP_DIR) (runbooks/restore.md, "Get the server's own
+# dated tar.gz in ~/Backups/vserver (runbooks/restore.md, "Get the server's own
 # state back" and "Get an application's data back"). Each application stops
-# for the seconds its copy takes. The script runs on
-# the server from stdin, as wg-house does, and installs nothing there. Run it
-# as often as you like. The archive holds every secret on the server, so the
-# directory and each file are yours alone. It lands as .part and is renamed
-# only once tar can read all of it and it holds the site files, so a cut
-# connection never leaves a file that looks whole. The newest $(BACKUP_KEEP)
-# are kept.
-BACKUP_DIR  = $(HOME)/Backups/vserver
-BACKUP_KEEP = 30
+# for the seconds its copy takes. servers/backup runs on the server from
+# stdin, as wg-house does, and installs nothing there. servers/backup-pull is
+# the Mac's half: it refuses without FileVault, keeps the newest 30, and pings
+# the backup's dead man's switch when $(BACKUP_PING) exists. Run it as often
+# as you like.
+BACKUP_AGENT = com.andygeiss.vserver-backup
+BACKUP_HOME  = $(HOME)/.local/share/vserver-backup
+BACKUP_PING  = $(HOME)/.config/vserver-backup/ping.url
+BACKUP_PLIST = $(HOME)/Library/LaunchAgents/$(BACKUP_AGENT).plist
 
 backup:
-	sh -n servers/backup
-	mkdir -p '$(BACKUP_DIR)' && chmod 0700 '$(BACKUP_DIR)'
-	umask 077 && f='$(BACKUP_DIR)'/vserver-$$(date -u +%Y%m%dT%H%M%SZ).tgz && \
-		{ ssh $(ROOT) sh -s < servers/backup > "$$f.part" && \
-		  tar -tzf "$$f.part" | grep -q '^opt/caddy/sites/' && \
-		  mv "$$f.part" "$$f" && ls -l "$$f"; } || { rm -f "$$f.part"; exit 1; }
-	ls -1t '$(BACKUP_DIR)'/vserver-*.tgz | tail -n +$$(($(BACKUP_KEEP) + 1)) | xargs rm -f --
+	sh -n servers/backup-pull
+	ROOT='$(ROOT)' BACKUP_PING_FILE='$(BACKUP_PING)' sh servers/backup-pull
+
+# The same backup every night at 02:30, from launchd, so it no longer waits for
+# you to remember it. The files are copied, as claude-sandbox's are, never
+# linked: the agent in the sandbox can edit this checkout, and this job runs
+# ssh as root on the server. So a change here reaches the nightly run only
+# through this target — read the diff first. The ping URL is a secret, written
+# by hand, mode 0400, and this target refuses without it: a nightly backup
+# nobody hears about is the gap it closes. Runs twice safely: the copies and
+# the plist are rewritten, the agent is booted out and in again, and the last
+# line prints what launchd actually has.
+backup-daily:
+	sh -n servers/backup-pull && sh -n servers/backup
+	test -s '$(BACKUP_PING)' || { echo "write the backup's ping URL to $(BACKUP_PING), mode 0400, first" >&2; exit 1; }
+	mkdir -p '$(BACKUP_HOME)' '$(HOME)/Library/LaunchAgents' '$(HOME)/Library/Logs'
+	install -m 0755 servers/backup-pull '$(BACKUP_HOME)/'
+	install -m 0644 servers/backup '$(BACKUP_HOME)/'
+	install -m 0644 servers/$(BACKUP_AGENT).plist '$(BACKUP_PLIST)'
+	launchctl bootout gui/$$(id -u)/$(BACKUP_AGENT) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) '$(BACKUP_PLIST)'
+	launchctl print gui/$$(id -u)/$(BACKUP_AGENT) | grep -E '^\s(state|last exit code) ='
+
+# Stops the nightly backup and forgets it. The archives stay.
+backup-daily-stop:
+	launchctl bootout gui/$$(id -u)/$(BACKUP_AGENT) 2>/dev/null || true
+	rm -f '$(BACKUP_PLIST)'
+	rm -rf '$(BACKUP_HOME)'
 
 # Checks the server against servers/vserver.md and changes nothing: every
 # claim the document makes that a command can answer, one line each, ok or

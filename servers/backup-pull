@@ -1,0 +1,63 @@
+#!/bin/sh
+# The Mac's half of the backup: runs servers/backup on the server over ssh, as
+# root, from stdin, and keeps the archive here. `make backup` runs it from this
+# checkout. `make backup-daily` runs a copy every night, from launchd
+# (runbooks/restore.md, "Get the server's own state back").
+#
+# It refuses to run on a Mac without FileVault: the archive holds every secret
+# on the server, unencrypted. It lands as .part and is renamed only once tar
+# can read all of it and it holds the site files, so a cut connection never
+# leaves a file that looks whole. The newest $BACKUP_KEEP are kept.
+#
+# When the ping file exists, a good backup pings its URL and a failed one pings
+# /fail with the reasons, as servers/health-check does. A Mac that stops
+# backing up sends nothing, and the switch raises the alert.
+#
+# The script beside this file, ./backup, is the half that runs on the server.
+set -u
+
+here=$(cd "$(dirname "$0")" && pwd) || exit 1
+root=${ROOT:-root@vserver}
+dir=${BACKUP_DIR:-$HOME/Backups/vserver}
+keep=${BACKUP_KEEP:-30}
+ping_file=${BACKUP_PING_FILE:-$HOME/.config/vserver-backup/ping.url}
+
+pull() {
+	fdesetup status | grep -q '^FileVault is On' || {
+		echo "backup: FileVault is off on this Mac, and the archive holds every secret on the server." >&2
+		echo "backup: turn it on in System Settings, Privacy & Security, FileVault, and run this again." >&2
+		return 1
+	}
+	sh -n "$here/backup" || return 1
+	mkdir -p "$dir" && chmod 0700 "$dir" || return 1
+
+	# Nobody can type a passphrase under launchd. BatchMode makes ssh fail at
+	# once there instead of waiting for one.
+	set -- "$root"
+	[ -t 0 ] || set -- -o BatchMode=yes "$@"
+
+	f=$dir/vserver-$(date -u +%Y%m%dT%H%M%SZ).tgz
+	{ (umask 077 && ssh "$@" sh -s < "$here/backup" > "$f.part") &&
+		tar -tzf "$f.part" | grep -q '^opt/caddy/sites/' &&
+		mv "$f.part" "$f" && ls -l "$f"; } || {
+		rm -f "$f.part"
+		echo "backup: no archive kept" >&2
+		return 1
+	}
+	ls -1t "$dir"/vserver-*.tgz | tail -n +$((keep + 1)) | xargs rm -f --
+}
+
+errors=$(mktemp) || exit 1
+trap 'rm -f "$errors"' EXIT
+status=0
+pull 2> "$errors" || status=1
+cat "$errors" >&2
+
+url=$(cat "$ping_file" 2> /dev/null) || exit "$status"
+if [ "$status" -eq 0 ]; then
+	curl -fsS -m 10 --retry 3 -o /dev/null "$url" || echo "backup: kept, but could not ping" >&2
+else
+	tail -c 10000 "$errors" | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$url/fail" ||
+		echo "backup: could not ping the failure either" >&2
+fi
+exit "$status"

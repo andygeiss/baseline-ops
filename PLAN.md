@@ -14,8 +14,12 @@ off it the same day. `make health-check` ran on vserver on 2026-10-31, and its
 timer pings. `make verify-host` passed there the same day, the first half of
 phase 3's "Done when". Next, in order:
 
-1. Run phase 1's "Done when": three outages, three alerts.
-2. Run each other phase's "Done when". A phase is done only after that.
+1. Run phase 1's "Done when": three outages, three alerts. The commands are
+   in servers/vserver.md, "Test that it alerts", with a fourth for the backup.
+2. Make the backup's check, write its URL on the Mac, and run `make
+   backup-daily` (runbooks/restore.md, "Every night, and the alert when it
+   stops").
+3. Run each other phase's "Done when". A phase is done only after that.
 
 Each phase below can be shipped on its own and ends in something you can check.
 They are in order of what a lost server would cost you. Delete this file when
@@ -107,7 +111,11 @@ Two separate things are at risk.
       `~/Backups/vserver`. No cloud storage, no timer, nothing installed on
       the server: the Mac holds the backup, and you run it as often as you like
 - [ ] FileVault on the Mac, and on Time Machine's disk: the archive holds every
-      secret, unencrypted
+      secret, unencrypted. `make backup` now refuses without FileVault; Time
+      Machine's "Encrypt backups" is still checked by hand
+- [x] `make backup-daily`: the same backup every night from launchd, from a
+      copy the sandbox cannot edit, pinging a check of its own
+- [ ] Install it on the Mac, and see the first nightly ping arrive
 - [x] `runbooks/restore.md`, "Get the server's own state back", rehearsed once
       into a scratch directory
 

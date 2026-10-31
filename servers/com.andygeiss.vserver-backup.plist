@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  make backup-daily installs this into ~/Library/LaunchAgents. Every night at
+  02:30 it runs the copy of servers/backup-pull that the same target installed.
+  A Mac that is asleep at 02:30 runs it when it wakes. launchd expands no $HOME
+  in a path, so sh does it, and the log goes to ~/Library/Logs. 02:30 is
+  well before the server's 04:00 reboot.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key><string>com.andygeiss.vserver-backup</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>exec "$HOME/.local/share/vserver-backup/backup-pull" &gt;&gt; "$HOME/Library/Logs/com.andygeiss.vserver-backup.log" 2&gt;&amp;1 &lt; /dev/null</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key><integer>2</integer>
+		<key>Minute</key><integer>30</integer>
+	</dict>
+</dict>
+</plist>

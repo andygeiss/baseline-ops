@@ -57,6 +57,7 @@ make health-check   # once per server: every five minutes, tell a dead man's swi
 make verify-host    # any time: check the server against servers/vserver.md; changes nothing
 make omlx-tunnel    # on the house Mac: hold the oMLX tunnel open, across reboots
 make backup         # on the Mac you work on, any time: the server's own state and the apps' data, copied onto the Mac
+make backup-daily   # on the Mac you work on: the same backup every night, and an alert when one fails or none comes
 make claude-sandbox # on the Mac you work on: Claude Code in a sandbox that sees one directory and two skills
 ```
 
@@ -85,7 +86,8 @@ counted, so a new one cannot make the list wrong:
   it reads on the Mac you work on. That copy is the backup; nothing in the
   cloud holds one. [runbooks/restore.md](runbooks/restore.md), "Get the
   server's own state back" and "Get an application's data back", is the way
-  back.
+  back. `backup-daily` runs it every night from launchd, from a copy
+  rather than this checkout, for the same reason `claude-sandbox` copies.
 - `claude-sandbox` sets up the Mac you work on, not a server: it installs the
   sandbox Claude Code runs in there
   ([runbooks/claude-sandbox.md](runbooks/claude-sandbox.md)). Unlike `make
@@ -126,6 +128,8 @@ baseline-ops/
 │   └── restore.md              ← get the data back
 ├── servers/
 │   ├── backup                  ← the server's own state and the apps' data as one tar.gz; make backup keeps it on the Mac
+│   ├── backup-pull             ← the Mac's half of make backup: FileVault check, keep 30, ping
+│   ├── com.andygeiss.vserver-backup.plist ← the launchd job make backup-daily installs
 │   ├── conn-limits             ← per-address limits on :443; make conn-limits ships it
 │   ├── health-check            ← every five minutes, ping a dead man's switch; make health-check ships it, with its units
 │   ├── verify-host             ← the server checked against vserver.md; make verify-host runs it

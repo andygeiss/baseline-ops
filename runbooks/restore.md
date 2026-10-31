@@ -101,7 +101,10 @@ before it belongs in a cron line nobody remembers.
 Some files are true of this machine only, so no repository holds them. `make
 backup`, run on your Mac, copies them there as one dated archive in
 `~/Backups/vserver/`. Run it as often as you like. The newest 30 are kept, and
-nothing is installed on the server for it.
+nothing is installed on the server for it. `make backup-daily` runs it every
+night at 02:30 from launchd, so the newest archive is at most a day old
+without you remembering anything. A Mac asleep at 02:30 runs it when it
+wakes.
 
 | What | Where | Lost means |
 |---|---|---|
@@ -122,11 +125,41 @@ check does not count the stop.
 
 **The archive holds every secret on the server, unencrypted.** The directory
 and each file are mode `0700` and `0600`. The Mac's disk MUST be encrypted
-(FileVault), and so MUST the disk Time Machine copies it to.
+(FileVault), and so MUST the disk Time Machine copies it to. `make backup`
+refuses to run while FileVault is off. It cannot see whether the Time Machine
+disk is encrypted, so check that yourself: System Settings, General, Time
+Machine, the disk's options show "Encrypt backups".
 
 ```sh
 make backup    # on the Mac; prints the archive it kept
 ```
+
+### Every night, and the alert when it stops
+
+Make a second check on the service the health check uses (servers/vserver.md,
+"How you find out"), with a period of one day and a grace of a few hours. Its
+ping URL is a secret: whoever has it can silence the alert. Write it on the
+Mac, then install the nightly run, which refuses to start without it:
+
+```sh
+mkdir -p ~/.config/vserver-backup && (umask 077 && cat > ~/.config/vserver-backup/ping.url) \
+	&& chmod 0400 ~/.config/vserver-backup/ping.url    # paste the URL, then ctrl-d
+make backup-daily
+launchctl kickstart gui/$(id -u)/com.andygeiss.vserver-backup    # one run now, to see it work
+tail ~/Library/Logs/com.andygeiss.vserver-backup.log             # the archive it kept, or why not
+```
+
+`make backup` pings the same check once the URL is there, so a backup by hand
+counts too. The nightly run uses copies in `~/.local/share/vserver-backup`,
+never this checkout, because the agent in the Claude sandbox can write to the
+checkout. So a change to `servers/backup` or `servers/backup-pull` reaches the
+nightly run only after `make backup-daily`: read the diff first. `make
+backup-daily-stop` removes the job; the archives stay.
+
+ssh runs as root without a terminal under launchd, so the key for `root@vserver`
+must work without a prompt: one without a passphrase, or one in the macOS
+keychain (`ssh-add --apple-use-keychain`). The first night that it cannot, the
+alert tells you.
 
 ### Rehearse it
 
