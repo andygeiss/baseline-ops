@@ -11,8 +11,16 @@ cd / || exit 1
 # What each one is, and what losing it costs: runbooks/restore.md, "Get the
 # server's own state back". /opt holds every server-owned file — site files,
 # secrets, site.env, litestream.yml, each .env — but not what a deploy writes
-# again, and not the snapshots, which the data below replaces.
-set -- opt etc/systemd/network var/lib/docker/volumes/caddy_caddy_data
+# again, and not the snapshots, which the data below replaces. Of
+# /etc/systemd/network only wg0's key and the house's peer: the rest is
+# written again by `make wg-exit`, or names this machine's own address. The
+# host keys let a new server keep this one's identity, so no ssh client,
+# the Mac Studio's tunnel included, refuses it. A file missing here fails the
+# backup, which is the point: each one is needed for a rebuild.
+set -- opt \
+	etc/systemd/network/wg0.key etc/systemd/network/50-wg0.netdev.d \
+	etc/health-check.url home/andygeiss/.ssh/authorized_keys etc/ssh/ssh_host_*_key etc/ssh/ssh_host_*_key.pub \
+	var/lib/docker/volumes/caddy_caddy_data
 
 # Each application's data, copied cold, as a deploy's snapshot is: stopped, so
 # the database and its WAL are one consistent state. An application is what

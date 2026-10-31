@@ -107,7 +107,10 @@ nothing is installed on the server for it.
 |---|---|---|
 | site files | `/opt/caddy/sites/*.caddy` | every domain, written again from memory |
 | secrets, `site.env`, `litestream.yml`, `.env` | `/opt/<app>/` | every credential issued again |
-| wg0's key, and the house's peer | `/etc/systemd/network/` | the house set up again: `make wg-house` |
+| wg0's key, and the house's peer | `/etc/systemd/network/wg0.key`, `50-wg0.netdev.d/` | the house set up again: `make wg-house` |
+| the ssh host keys | `/etc/ssh/ssh_host_*_key{,.pub}` | every ssh client refuses the new server, the Studio's tunnel included, until told to trust it |
+| the deploy account's keys | `/home/andygeiss/.ssh/authorized_keys` | the oMLX tunnel's restricted line written again from vserver.md |
+| the health check's ping URL | `/etc/health-check.url` | the URL copied again from the service |
 | certificates and the ACME account | volume `caddy_caddy_data` | Caddy asks for them again, and many at once meets Let's Encrypt's rate limits |
 | each application's data | volume `<app>_data`, as `data/<app>/` | the users' data, since the last `make backup` |
 
