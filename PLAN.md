@@ -6,14 +6,13 @@ that runs when nobody is looking. Nothing tells you that a site is down. The
 backups are mostly a runbook nobody has rehearsed. The server cannot be rebuilt,
 or checked against its document, by running anything.
 
-**Status, 2026-10-27.** The boxes ticked below are written, and `checks.yml`
+**Status, 2026-10-31.** The boxes ticked below are written, and `checks.yml`
 passes on them, shellcheck included. `make backup` ran on the Mac on
-2026-10-27, and its archive was rehearsed the same day. The rest has not run on
-vserver yet. Next, in order:
+2026-10-27, and its archive was rehearsed the same day. The ping URL was
+written to `/etc/health-check.url` on vserver on 2026-10-31, and Portainer came
+off it the same day. Next, in order:
 
-1. Pick the monitoring service, write its ping URL to the server
-   (servers/vserver.md, "How you find out"), and run `make health-check
-   verify-host`.
+1. Run `make health-check verify-host`, and see the first ping arrive.
 2. Run each phase's "Done when". A phase is done only after that.
 
 Each phase below can be shipped on its own and ends in something you can check.
