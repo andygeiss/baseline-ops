@@ -10,10 +10,12 @@ or checked against its document, by running anything.
 passes on them, shellcheck included. `make backup` ran on the Mac on
 2026-10-27, and its archive was rehearsed the same day. The ping URL was
 written to `/etc/health-check.url` on vserver on 2026-10-31, and Portainer came
-off it the same day. Next, in order:
+off it the same day. `make health-check` ran on vserver on 2026-10-31, and its
+timer pings. `make verify-host` passed there the same day, the first half of
+phase 3's "Done when". Next, in order:
 
-1. Run `make health-check verify-host`, and see the first ping arrive.
-2. Run each phase's "Done when". A phase is done only after that.
+1. Run phase 1's "Done when": three outages, three alerts.
+2. Run each other phase's "Done when". A phase is done only after that.
 
 Each phase below can be shipped on its own and ends in something you can check.
 They are in order of what a lost server would cost you. Delete this file when
