@@ -173,7 +173,8 @@ claude-sandbox --shell -c 'curl -sS https://host.containers.internal/'    # the 
 claude-sandbox -p --allowedTools=WebFetch 'Fetch https://example.com/ and reply with its title only'    # Example Domain
 ```
 
-The third one ends with the launcher naming what the proxy refused:
+Both 403s end with the launcher naming what the proxy refused, here for
+`192.168.1.1`:
 
 ```text
 claude-sandbox: the proxy refused these — it lets through HTTPS to public addresses only:
