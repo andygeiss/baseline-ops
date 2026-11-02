@@ -195,7 +195,9 @@ container healthy, the house shaken hands on wg0, every site `200`.
 
 **If the address changed**, the Mac Studio's tunnel needs one more step. Its
 `~/.ssh/config` names the address, not `vserver`, and ssh files a host key
-under the address. Change `HostName` under `Host vserver` there, then let ssh
+under the address. Change `HostName` under `Host vserver` there, and under
+`Host vserver-admin` ([vserver.md](../servers/vserver.md), "Tunnels from the
+house"), then let ssh
 learn the key under the new address once. It is the old server's key, so this
 trusts nothing new. The tunnel's agent runs ssh in batch mode, which never
 asks:

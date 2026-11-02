@@ -84,6 +84,25 @@ The Studio finds this server through its own `~/.ssh/config`, not
 `/etc/hosts`: `Host vserver` there names the address and the key. When the
 address changes, that line changes too.
 
+**On the Studio, `vserver` is the tunnel, not you.** `Host vserver` there pins
+`~/.ssh/omlx-tunnel` with `IdentitiesOnly yes`, so `ssh vserver` — and every
+`andygeiss@vserver` in these runbooks — logs in with the tunnel's key, runs
+`false`, and closes. ssh says only `PTY allocation request failed on channel
+0`. A person at the Studio uses a second entry in the same file, with their own
+key:
+
+```
+Host vserver-admin
+    HostName 37.120.186.20
+    User andygeiss
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+```
+
+On the Studio, read `andygeiss@vserver` in a runbook as `vserver-admin`. Never
+point `Host vserver` at another key to get a shell: the tunnel's agent finds
+its key through that entry.
+
 **The house machine stays on.** The Mac Studio does not sleep (`pmset -g` says
 `sleep 0`), so a `502` from `omlx.ai-at-home.de` is worth chasing at any hour.
 A minute at 04:00 can be this server rebooting. Otherwise one of two things is
