@@ -95,7 +95,7 @@ machine. Then:
 ```sh
 podman machine stop
 podman machine rm podman-machine-default
-podman machine init --rootful --volume "$HOME/workspace:$HOME/workspace"
+podman machine init --rootful --memory 4096 --volume "$HOME/workspace:$HOME/workspace"
 podman machine start
 podman machine ssh ls -A "$HOME"            # workspace: nothing else of your home
 ```
@@ -104,10 +104,22 @@ podman machine ssh ls -A "$HOME"            # workspace: nothing else of your ho
 only one shared. `--rootful` keeps the machine's default connection rootful;
 the sandbox uses the rootless one either way.
 
-The machine keeps podman's default 2 GB of memory, and a big Go package does
-not compile in it with Go's defaults: a database driver failed at two
-versions. `GOGC=20 go build -p 1` builds it, one package at a time, with the
-garbage collector running more often.
+`--memory 4096` gives the machine 4 GB, twice podman's default. At 2 GB a big
+Go package does not compile with Go's defaults: the kernel kills the compiler
+on `modernc.org/sqlite/lib`, the driver every web application uses, and it did
+at two driver versions. A cold build of that package peaks near 1.3 GB, and
+vet, `go test -race` and build together near 1.5 GB, so two containers
+compiling at once do not fit in 2 GB and do in 4. An existing machine takes
+the new size without being replaced:
+
+```sh
+podman machine stop
+podman machine set --memory 4096
+podman machine start
+```
+
+If a build is still killed, `GOGC=20 go build -p 1` needs less: one package
+at a time, with the garbage collector running more often.
 
 Rosetta goes with `~/.config/containers`: podman 6.1 switches it on through
 that folder and has no flag for it. amd64 images still run, through QEMU, only
