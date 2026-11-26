@@ -186,6 +186,34 @@ ran kernel 7.0.0-30 for 52 days while -31, -34 and -38 were installed and
 waited. [runbooks/host.md](../runbooks/host.md) is the same
 job by hand: in a version pass, or for a fix that should not wait for 04:00.
 
+## Names and packages
+
+**The host's DNS is one file, `/etc/systemd/resolved.conf.d/10-upstream.conf`**,
+naming Quad9 — the resolver `KNOPPERS` hands out too:
+
+```
+[Resolve]
+DNS=9.9.9.9 149.112.112.112 2620:fe::fe 2620:fe::9
+```
+
+The netplan file cloud-init wrote names no server, so without this file
+systemd-resolved has none either, and nothing on the host resolves a name.
+That happened on 2026-11-21, when a hand-run upgrade restarted resolved, and
+it stayed so for five days: the health check could not reach its ping URL,
+unattended-upgrades fetched nothing, and Caddy could not have renewed a
+certificate. The containers kept serving, so no site showed it. A rebuilt
+server needs this file back before anything else.
+
+```sh
+ssh andygeiss@vserver 'resolvectl dns | head -1; getent hosts hc-ping.com'   # a server, and an address
+```
+
+**Packages come from `archive.ubuntu.com`** and `security.ubuntu.com`, in
+`/etc/apt/sources.list.d/ubuntu.sources`. The installer had picked
+`at.archive.ubuntu.com`, which stopped serving `resolute` by 2026-11-26 and
+answered 404, so only the security suite was refreshed. A country mirror is a
+mirror someone else retires.
+
 ## How you find out
 
 The server cannot report its own death, so both signals end outside it, at a
@@ -327,8 +355,8 @@ both, and the unit runs after Docker, because Docker is what creates the chain.
 DOCKER-USER` MUST print a chain — the script refuses to run when it does not. If
 it prints nothing, this Engine runs its nftables backend, the chain answers to
 another name, and every rule above would go where nothing reads it. Engine
-29.9.1 here still uses the iptables backend, and both `xt_connlimit` and
-`xt_hashlimit` load (checked 2026-10-18).
+29.10.1 here still uses the iptables backend, and both `xt_connlimit` and
+`xt_hashlimit` load on kernel 7.0.0-44 (checked 2026-11-26).
 
 **conntrack carries weight once these rules exist.** `connlimit` counts entries
 in it, and a full table drops every new connection on this host — including the
